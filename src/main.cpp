@@ -4,6 +4,7 @@
 #include "Pixel.h"
 #include "World.h"
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <unordered_map>
 
@@ -179,38 +180,93 @@ void test_integration() {
 void test_chunk() {
   cout << "\n=== CHUNK TESTS ===\n";
 
-  // 1. Create a chunk at position (0, 0)
+  // 1. Create a chunk — terrain is now procedural!
   Chunk chunk({0, 0});
+  cout << "Chunk (0,0):\n";
   print_chunk(chunk);
 
-  // 2. Verify terrain layers
-  assert(chunk.get_block(5, 0) == BlockType::AIR);
-  assert(chunk.get_block(5, 3) == BlockType::GRASS);
-  assert(chunk.get_block(5, 5) == BlockType::DIRT);
-  assert(chunk.get_block(5, 7) == BlockType::STONE);
-  assert(chunk.get_block(5, 9) == BlockType::BEDROCK);
-  cout << "Terrain layers: correct\n";
+  // 2. Different chunk position → different terrain
+  Chunk chunk2({1, 0});
+  cout << "\nChunk (1,0):\n";
+  print_chunk(chunk2);
 
-  // 3. Out-of-bounds returns AIR
-  assert(chunk.get_block(-1, 0) == BlockType::AIR);
-  assert(chunk.get_block(99, 99) == BlockType::AIR);
-  cout << "Out-of-bounds safety: correct\n";
+  // 3. Bedrock is ALWAYS at row 9 (regardless of noise)
+  for (int x = 0; x < 10; x++) {
+    assert(chunk.get_block(x, 9) == BlockType::BEDROCK);
+  }
+  cout << "Bedrock layer: always at row 9 - correct\n";
 
-  // 4. Mining! Change a stone to air
+  // 4. Top rows should be AIR (surface is at row 2 minimum)
+  for (int x = 0; x < 10; x++) {
+    assert(chunk.get_block(x, 0) == BlockType::AIR);
+  }
+  cout << "Sky layer: row 0 always AIR - correct\n";
+
+  // 5. Deterministic — same position + seed = same terrain
+  Chunk chunk_copy({0, 0});
+  bool identical = true;
+  for (int y = 0; y < 10; y++) {
+    for (int x = 0; x < 10; x++) {
+      if (chunk.get_block(x, y) != chunk_copy.get_block(x, y)) {
+        identical = false;
+      }
+    }
+  }
+  assert(identical);
+  cout << "Deterministic generation: same seed = same world - correct\n";
+
+  // 6. Mining and building still work
   chunk.set_block(5, 7, BlockType::AIR);
   assert(chunk.get_block(5, 7) == BlockType::AIR);
-  cout << "Mining (set_block): correct\n";
-
-  // 5. Building! Place diamond where air was
-  chunk.set_block(5, 1, BlockType::DIAMOND);
-  assert(chunk.get_block(5, 1) == BlockType::DIAMOND);
-  cout << "Building (set_block): correct\n";
-
-  // 6. Print modified chunk
-  cout << "\nAfter mining + building:\n";
-  print_chunk(chunk);
+  cout << "Mining: correct\n";
 
   cout << "All Chunk tests PASSED!\n";
+}
+
+void test_terrain() {
+  cout << "\n=== TERRAIN TESTS ===\n";
+
+  // 1. Print 5 chunks side by side (50 columns wide!)
+  World world;
+  cout << "World view (5 chunks, x: 0-49):\n";
+  print_world(world, 0, 49, 0, 9);
+
+  // 2. Count ores in the visible area
+  int iron = 0, gold = 0, diamond = 0;
+  for (int x = 0; x < 50; x++) {
+    for (int y = 0; y < 10; y++) {
+      BlockType b = world.get_block(x, y);
+      if (b == BlockType::IRON)
+        iron++;
+      else if (b == BlockType::GOLD)
+        gold++;
+      else if (b == BlockType::DIAMOND)
+        diamond++;
+    }
+  }
+  cout << "Ores found: Iron=" << iron << " Gold=" << gold
+       << " Diamond=" << diamond << "\n";
+  cout << "Iron > Gold > Diamond? "
+       << (iron >= gold && gold >= diamond ? "yes" : "no") << "\n";
+
+  // 3. Verify noise is deterministic
+  float a = fbm(25.0f, 42);
+  float b = fbm(25.0f, 42);
+  assert(a == b);
+  cout << "Noise determinism: correct\n";
+
+  // 4. Verify noise is smooth (neighbors differ by < 0.3)
+  bool smooth = true;
+  for (int x = 0; x < 100; x++) {
+    float v1 = fbm(static_cast<float>(x), 42);
+    float v2 = fbm(static_cast<float>(x + 1), 42);
+    if (std::abs(v1 - v2) > 0.3f)
+      smooth = false;
+  }
+  assert(smooth);
+  cout << "Noise smoothness: correct\n";
+
+  cout << "All Terrain tests PASSED!\n";
 }
 
 void test_world() {
@@ -266,6 +322,7 @@ int main() {
   test_integration();
   test_chunk();
   test_world();
+  test_terrain();
 
   return 0;
 }

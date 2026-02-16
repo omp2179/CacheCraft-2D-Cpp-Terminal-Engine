@@ -2,8 +2,10 @@
 #include "BlockType.h"
 #include "Coord.h"
 #include "Pixel.h"
+#include "Terrain.h"
 #include <array>
 #include <iostream>
+
 
 constexpr int CHUNK_SIZE = 10;
 
@@ -31,23 +33,7 @@ public:
   Coord get_position() const { return position; }
 
 private:
-  void generate_terrain() {
-    for (int i = 0; i < CHUNK_SIZE; ++i) {
-      for (int j = 0; j < CHUNK_SIZE; ++j) {
-        if (i < 3) {
-          blocks[i][j] = BlockType::AIR;
-        } else if (i == 3) {
-          blocks[i][j] = BlockType::GRASS;
-        } else if (i < 6) {
-          blocks[i][j] = BlockType::DIRT;
-        } else if (i < 9) {
-          blocks[i][j] = BlockType::STONE;
-        } else {
-          blocks[i][j] = BlockType::BEDROCK;
-        }
-      }
-    }
-  }
+  void generate_terrain() { generate_chunk_terrain(blocks, position.x); }
 };
 
 inline void print_chunk(const Chunk &chunk) {
