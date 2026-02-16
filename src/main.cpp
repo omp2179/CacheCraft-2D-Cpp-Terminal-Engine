@@ -2,6 +2,7 @@
 #include "Chunk.h"
 #include "Coord.h"
 #include "Pixel.h"
+#include "ScreenBuffer.h"
 #include "World.h"
 #include <cassert>
 #include <cmath>
@@ -311,6 +312,158 @@ void test_world() {
   cout << "All World tests PASSED!\n";
 }
 
+void test_screenbuffer() {
+  cout << "\n=== SCREENBUFFER TESTS ===\n";
+
+  ScreenBuffer screen;
+
+  // 1. Size check
+  cout << "Screen size: " << SCREEN_WIDTH << "x" << SCREEN_HEIGHT << "\n";
+  assert(SCREEN_WIDTH == 80);
+  assert(SCREEN_HEIGHT == 24);
+  cout << "Size constants: correct\n";
+
+  // 2. Clear fills with empty white spaces
+  screen.clear();
+  Pixel p = screen.get_pixel(0, 0);
+  assert(p.ch == ' ' && p.color == Color::WHITE);
+  p = screen.get_pixel(79, 23);
+  assert(p.ch == ' ' && p.color == Color::WHITE);
+  cout << "Clear: all pixels empty white space - correct\n";
+
+  // 3. Set pixel and read it back
+  screen.set_pixel(10, 5, {'@', Color::CYAN});
+  p = screen.get_pixel(10, 5);
+  assert(p.ch == '@');
+  assert(p.color == Color::CYAN);
+  cout << "Set/get pixel: correct\n";
+
+  // 4. Out-of-bounds set is silently ignored
+  screen.set_pixel(-1, -1, {'X', Color::RED});
+  screen.set_pixel(999, 999, {'X', Color::RED});
+  // No crash = success
+  cout << "Out-of-bounds set_pixel: safely ignored\n";
+
+  // 5. Out-of-bounds get returns empty pixel
+  p = screen.get_pixel(-5, -5);
+  assert(p.ch == ' ' && p.color == Color::WHITE);
+  p = screen.get_pixel(999, 0);
+  assert(p.ch == ' ' && p.color == Color::WHITE);
+  cout << "Out-of-bounds get_pixel: returns empty - correct\n";
+
+  // 6. Draw text and verify each character
+  screen.clear();
+  screen.draw_text(3, 0, "HI", Color::GREEN);
+  Pixel h = screen.get_pixel(3, 0);
+  Pixel i = screen.get_pixel(4, 0);
+  Pixel after = screen.get_pixel(5, 0);
+  assert(h.ch == 'H' && h.color == Color::GREEN);
+  assert(i.ch == 'I' && i.color == Color::GREEN);
+  assert(after.ch == ' '); // untouched pixel stays empty
+  cout << "Draw text: characters placed correctly\n";
+
+  // 7. Draw a scene and verify key pixels
+  screen.clear();
+  // Grass row
+  for (int x = 0; x < SCREEN_WIDTH; x++) {
+    screen.set_pixel(x, 5, {'"', Color::GREEN});
+  }
+  // Player
+  screen.set_pixel(40, 4, {'@', Color::CYAN});
+  // HUD
+  screen.draw_text(0, 23, "HP:100", Color::YELLOW);
+
+  // Verify grass
+  p = screen.get_pixel(0, 5);
+  assert(p.ch == '"' && p.color == Color::GREEN);
+  p = screen.get_pixel(79, 5);
+  assert(p.ch == '"' && p.color == Color::GREEN);
+
+  // Verify player
+  p = screen.get_pixel(40, 4);
+  assert(p.ch == '@' && p.color == Color::CYAN);
+
+  // Verify HUD
+  p = screen.get_pixel(0, 23);
+  assert(p.ch == 'H' && p.color == Color::YELLOW);
+  p = screen.get_pixel(1, 23);
+  assert(p.ch == 'P' && p.color == Color::YELLOW);
+
+  // Verify sky (untouched = empty)
+  p = screen.get_pixel(0, 0);
+  assert(p.ch == ' ');
+  cout << "Scene verification: all layers correct\n";
+
+  cout << "All ScreenBuffer tests PASSED!\n";
+
+  // 8. VISUAL DEMO — render ACTUAL procedural terrain!
+  // 5 frames, each showing a different part of the world
+  // This connects: World → Chunk → Terrain(FBM) → Pixel → ScreenBuffer →
+  // render()
+  cout << "\nVisual demo: 5 frames of real FBM terrain (5 sec each)...\n";
+  cout << "(Screen will clear in 2 seconds)\n";
+
+#ifdef _WIN32
+  Sleep(2000);
+  system("cls");
+
+  World demo_world;
+
+  // 5 frames: camera moves east by 80 blocks each frame
+  int camera_positions[] = {0, 80, 160, -80, 300};
+  string labels[] = {"Frame 1/5: World origin (x: 0-79)",
+                     "Frame 2/5: Walking east (x: 80-159)",
+                     "Frame 3/5: Far east (x: 160-239)",
+                     "Frame 4/5: Negative world! (x: -80 to -1)",
+                     "Frame 5/5: Deep east (x: 300-379)"};
+
+  for (int frame = 0; frame < 5; frame++) {
+    int cam_x = camera_positions[frame];
+
+    screen.clear();
+
+    // Title
+    screen.draw_text(25, 0, "MINECRAFT 2D - TERRAIN VIEWER", Color::GREEN);
+
+    // Render actual world terrain using FBM noise!
+    // Screen rows 2-21 show world rows 0-9 (scaled 2x vertically for
+    // visibility)
+    for (int sx = 0; sx < SCREEN_WIDTH; sx++) {
+      int world_x = cam_x + sx;
+
+      for (int wy = 0; wy < 10; wy++) {
+        BlockType block = demo_world.get_block(world_x, wy);
+        Pixel pixel = block_to_pixel(block);
+
+        // Draw each world row as 2 screen rows (so 10 world rows = 20 screen
+        // rows)
+        int screen_y = 2 + wy * 2;
+        screen.set_pixel(sx, screen_y, pixel);
+        screen.set_pixel(sx, screen_y + 1, pixel);
+      }
+    }
+
+    // Player marker in the middle
+    screen.set_pixel(40, 2, {'V', Color::CYAN});
+
+    // HUD
+    screen.draw_text(0, 22, labels[frame], Color::CYAN);
+
+    string pos_info = "Camera X: " + std::to_string(cam_x) + " to " +
+                      std::to_string(cam_x + 79) + "  Chunks loaded: " +
+                      std::to_string(demo_world.chunk_count());
+    screen.draw_text(0, 23, pos_info, Color::YELLOW);
+
+    screen.render();
+    Sleep(5000);
+  }
+
+  system("cls");
+  cout << "Visual demo complete! 5 frames of FBM terrain rendered!\n";
+  cout << "Total chunks loaded: " << demo_world.chunk_count() << "\n";
+#endif
+}
+
 int main() {
 #ifdef _WIN32
   enable_virtual_terminal();
@@ -323,6 +476,7 @@ int main() {
   test_chunk();
   test_world();
   test_terrain();
+  test_screenbuffer();
 
   return 0;
 }
