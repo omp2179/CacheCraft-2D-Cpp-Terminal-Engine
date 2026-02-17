@@ -6,9 +6,6 @@
 #include <array>
 #include <iostream>
 
-
-constexpr int CHUNK_SIZE = 10;
-
 class Chunk {
   std::array<std::array<BlockType, CHUNK_SIZE>, CHUNK_SIZE> blocks;
   Coord position;

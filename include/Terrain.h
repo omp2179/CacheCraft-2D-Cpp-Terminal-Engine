@@ -5,6 +5,8 @@
 #include <cstring>
 #include <iostream>
 
+constexpr int CHUNK_SIZE = 32;
+
 inline float hash_noise(int x, int seed) {
   int n = x * 374761393 + seed * 668265263;
   n = (n << 13) ^ n;
@@ -51,24 +53,29 @@ inline float fbm(float x, int seed, int octaves = 4) {
   return value / max_amplitude;
 }
 
-inline void
-generate_chunk_terrain(std::array<std::array<BlockType, 10>, 10> &blocks,
-                       int cx, int seed = 42) {
-  for (int x = 0; x < 10; ++x) {
-    int wx = cx * 10 + x;
+inline void generate_chunk_terrain(
+    std::array<std::array<BlockType, CHUNK_SIZE>, CHUNK_SIZE> &blocks, int cx,
+    int seed = 42) {
+  for (int x = 0; x < CHUNK_SIZE; ++x) {
+    int wx = cx * CHUNK_SIZE + x;
 
     float noise = fbm(static_cast<float>(wx), seed);
 
-    int surface_y = 2 + static_cast<int>(noise * 4);
+    int surface_y = 8 + static_cast<int>(noise * 8);
 
-    for (int y = 0; y < 10; ++y) {
+    if (surface_y < 2)
+      surface_y = 2;
+    if (surface_y > CHUNK_SIZE - 6)
+      surface_y = CHUNK_SIZE - 6;
+
+    for (int y = 0; y < CHUNK_SIZE; ++y) {
       if (y < surface_y) {
         blocks[y][x] = BlockType::AIR;
       } else if (y == surface_y) {
         blocks[y][x] = BlockType::GRASS;
-      } else if (y < surface_y + 3) {
+      } else if (y < surface_y + 4) {
         blocks[y][x] = BlockType::DIRT;
-      } else if (y < 9) {
+      } else if (y < CHUNK_SIZE - 1) {
 
         float ore_noise = hash_noise(wx * 100 + y, seed + 99);
 

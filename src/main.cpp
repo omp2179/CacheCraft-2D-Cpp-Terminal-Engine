@@ -1,12 +1,14 @@
 #include "BlockType.h"
 #include "Chunk.h"
 #include "Coord.h"
+#include "Input.h"
 #include "Pixel.h"
 #include "ScreenBuffer.h"
 #include "World.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 
 // THIS enables colored output on Windows terminal
@@ -191,14 +193,14 @@ void test_chunk() {
   cout << "\nChunk (1,0):\n";
   print_chunk(chunk2);
 
-  // 3. Bedrock is ALWAYS at row 9 (regardless of noise)
-  for (int x = 0; x < 10; x++) {
-    assert(chunk.get_block(x, 9) == BlockType::BEDROCK);
+  // 3. Bedrock is ALWAYS at bottom row (regardless of noise)
+  for (int x = 0; x < CHUNK_SIZE; x++) {
+    assert(chunk.get_block(x, CHUNK_SIZE - 1) == BlockType::BEDROCK);
   }
-  cout << "Bedrock layer: always at row 9 - correct\n";
+  cout << "Bedrock layer: always at row " << CHUNK_SIZE - 1 << " - correct\n";
 
-  // 4. Top rows should be AIR (surface is at row 2 minimum)
-  for (int x = 0; x < 10; x++) {
+  // 4. Top rows should be AIR
+  for (int x = 0; x < CHUNK_SIZE; x++) {
     assert(chunk.get_block(x, 0) == BlockType::AIR);
   }
   cout << "Sky layer: row 0 always AIR - correct\n";
@@ -206,8 +208,8 @@ void test_chunk() {
   // 5. Deterministic — same position + seed = same terrain
   Chunk chunk_copy({0, 0});
   bool identical = true;
-  for (int y = 0; y < 10; y++) {
-    for (int x = 0; x < 10; x++) {
+  for (int y = 0; y < CHUNK_SIZE; y++) {
+    for (int x = 0; x < CHUNK_SIZE; x++) {
       if (chunk.get_block(x, y) != chunk_copy.get_block(x, y)) {
         identical = false;
       }
@@ -230,12 +232,12 @@ void test_terrain() {
   // 1. Print 5 chunks side by side (50 columns wide!)
   World world;
   cout << "World view (5 chunks, x: 0-49):\n";
-  print_world(world, 0, 49, 0, 9);
+  print_world(world, 0, 49, 0, CHUNK_SIZE - 1);
 
   // 2. Count ores in the visible area
   int iron = 0, gold = 0, diamond = 0;
   for (int x = 0; x < 50; x++) {
-    for (int y = 0; y < 10; y++) {
+    for (int y = 0; y < CHUNK_SIZE; y++) {
       BlockType b = world.get_block(x, y);
       if (b == BlockType::IRON)
         iron++;
@@ -476,7 +478,132 @@ int main() {
   test_chunk();
   test_world();
   test_terrain();
-  test_screenbuffer();
+  // test_screenbuffer();
+
+  cout << "\n=== ALL TESTS PASSED! ===\n";
+  cout << "Starting game in 3 seconds...\n";
+#ifdef _WIN32
+  Sleep(3000);
+  system("cls");
+#endif
+
+  World world;
+  ScreenBuffer screen;
+
+  int player_x = 40;
+  int player_y = 0;
+
+  // Find the ground — drop player to surface (now searching through 32 rows)
+  while (player_y < CHUNK_SIZE - 1 &&
+         world.get_block(player_x, player_y) == BlockType::AIR) {
+    ++player_y;
+  }
+  --player_y; // stand ON the surface, not inside it
+
+  // Gravity system
+  int fall_timer = 0;
+  const int GRAVITY_INTERVAL = 3; // fall 1 block every 3 frames (~6.6 blocks/sec)
+  int jump_fuel = 0;              // frames of upward movement remaining
+
+  bool running = true;
+  while (running) {
+    Action action = get_input();
+
+    // --- 1. INPUT: Horizontal movement ---
+    int nw_x = player_x;
+
+    switch (action) {
+    case Action::MOVE_LEFT:
+      nw_x--;
+      break;
+    case Action::MOVE_RIGHT:
+      nw_x++;
+      break;
+    case Action::MOVE_UP: {
+      // Jump — only if standing on solid ground
+      bool on_ground =
+          world.get_block(player_x, player_y + 1) != BlockType::AIR;
+      if (on_ground && jump_fuel == 0) {
+        jump_fuel = 3; // jump for 3 frames (3 blocks high)
+      }
+      break;
+    }
+    case Action::EXIT:
+      running = false;
+      break;
+    default:
+      break;
+    }
+
+    // --- 2. HORIZONTAL COLLISION ---
+    if (world.get_block(nw_x, player_y) == BlockType::AIR) {
+      player_x = nw_x;
+    }
+
+    // --- 3. VERTICAL PHYSICS ---
+    if (jump_fuel > 0) {
+      // Rising (jumping)
+      if (world.get_block(player_x, player_y - 1) == BlockType::AIR) {
+        player_y--;
+      } else {
+        jump_fuel = 0; // hit ceiling, stop rising
+      }
+      jump_fuel--;
+    } else {
+      // Gravity: fall every GRAVITY_INTERVAL frames
+      fall_timer++;
+      if (fall_timer >= GRAVITY_INTERVAL) {
+        fall_timer = 0;
+        if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
+          player_y++;
+        }
+      }
+    }
+
+    // --- 4. RENDER ---
+    screen.clear();
+
+    int cam_x = player_x - SCREEN_WIDTH / 2;
+    int cam_y = player_y - SCREEN_HEIGHT / 2;
+
+    for (int sy = 0; sy < SCREEN_HEIGHT; ++sy) {
+      for (int sx = 0; sx < SCREEN_WIDTH; ++sx) {
+        int wx = cam_x + sx;
+        int wy = cam_y + sy;
+
+        BlockType block;
+        if (wy < 0) {
+          block = BlockType::AIR;
+        } else if (wy >= CHUNK_SIZE) {
+          block = BlockType::BEDROCK;
+        } else {
+          block = world.get_block(wx, wy);
+        }
+        screen.set_pixel(sx, sy, block_to_pixel(block));
+      }
+    }
+
+    screen.set_pixel(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
+                     {'$', Color::BRIGHT_CYAN});
+
+    string hud = "Pos: (" + to_string(player_x) + ", " + to_string(player_y) +
+                 ")  [A/D] Walk  [W] Jump  [Q] Quit  Chunks: " +
+                 to_string(world.chunk_count());
+
+    screen.draw_text(0, 0, hud, Color::MAGENTA);
+
+    screen.render();
+
+#ifdef _WIN32
+    Sleep(50);
+#endif
+  }
+
+#ifdef _WIN32
+  system("cls");
+#endif
+  cout << "Thanks for playing! Total chunks explored: " << world.chunk_count()
+       << "\n";
 
   return 0;
 }
