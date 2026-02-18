@@ -36,21 +36,21 @@ inline std::ostream &operator<<(std::ostream &os, const Pixel &p) {
 inline Pixel block_to_pixel(BlockType b) {
   switch (b) {
   case BlockType::AIR:
-    return {' ', Color::WHITE};
+    return {' ', Color::BLACK};
   case BlockType::GRASS:
-    return {'"', Color::GREEN};
+    return {'"', Color::BRIGHT_GREEN};
   case BlockType::DIRT:
     return {'.', Color::RED};
   case BlockType::STONE:
-    return {'#', Color::WHITE};
+    return {'#', Color::GRAY};
   case BlockType::IRON:
-    return {'I', Color::BRIGHT_YELLOW};
+    return {'I', Color::BRIGHT_WHITE};
   case BlockType::GOLD:
-    return {'G', Color::YELLOW};
+    return {'G', Color::BRIGHT_YELLOW};
   case BlockType::DIAMOND:
-    return {'D', Color::CYAN};
+    return {'D', Color::BRIGHT_CYAN};
   case BlockType::BEDROCK:
-    return {'B', Color::GRAY};
+    return {'B', Color::MAGENTA};
   default:
     return {'?', Color::BRIGHT_RED};
   }

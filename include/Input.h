@@ -1,41 +1,66 @@
 #pragma once
 #include <conio.h>
 
-enum class Action { NONE, MOVE_LEFT, MOVE_RIGHT, MOVE_UP, MOVE_DOWN, EXIT };
+// All keys pressed in a single frame — allows simultaneous actions
+struct InputState {
+  bool move_left = false;
+  bool move_right = false;
+  bool jump = false;
+  bool mine_left = false;
+  bool mine_right = false;
+  bool mine_up = false;
+  bool mine_down = false;
+  bool place_block = false;
+  bool quit = false;
+};
 
-inline Action get_input() {
-  Action last_action = Action::NONE;
+inline InputState get_input() {
+  InputState state;
 
-  // Drain the ENTIRE buffer — use only the last key pressed
-  // This prevents lag when holding a key (buffer fills up)
   while (_kbhit()) {
-    char key = _getch();
+    int key = _getch();
 
-    switch (key) {
-    case 'a':
-    case 'A':
-      last_action = Action::MOVE_LEFT;
-      break;
-    case 'd':
-    case 'D':
-      last_action = Action::MOVE_RIGHT;
-      break;
-    case 'w':
-    case 'W':
-      last_action = Action::MOVE_UP;
-      break;
-    case 's':
-    case 'S':
-      last_action = Action::MOVE_DOWN;
-      break;
-    case 'q':
-    case 'Q':
-      last_action = Action::EXIT;
-      break;
-    default:
-      break;
+    if (key == 0 || key == 224) {
+      int arrow = _getch();
+
+      switch (arrow) {
+      case 75:
+        state.mine_left = true;
+        break;
+      case 77:
+        state.mine_right = true;
+        break;
+      case 72:
+        state.mine_up = true;
+        break;
+      case 80:
+        state.mine_down = true;
+        break;
+      }
+    } else {
+      switch (key) {
+      case 'a':
+      case 'A':
+        state.move_left = true;
+        break;
+      case 'd':
+      case 'D':
+        state.move_right = true;
+        break;
+      case 'w':
+      case 'W':
+        state.jump = true;
+        break;
+      case ' ':
+        state.place_block = true;
+        break;
+      case 'q':
+      case 'Q':
+        state.quit = true;
+        break;
+      }
     }
   }
 
-  return last_action;
+  return state;
 }

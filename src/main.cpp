@@ -110,11 +110,11 @@ void test_pixel() {
   // 3. block_to_pixel mapping
   Pixel grass = block_to_pixel(BlockType::GRASS);
   assert(grass.ch == '"');
-  assert(grass.color == Color::GREEN);
+  assert(grass.color == Color::BRIGHT_GREEN);
 
   Pixel diamond = block_to_pixel(BlockType::DIAMOND);
   assert(diamond.ch == 'D');
-  assert(diamond.color == Color::CYAN);
+  assert(diamond.color == Color::BRIGHT_CYAN);
   cout << "block_to_pixel mapping: correct\n";
 
   // 4. VISUAL TEST — colored output!
@@ -493,6 +493,11 @@ int main() {
   int player_x = 40;
   int player_y = 0;
 
+  int facing = 1;
+
+  int inventory[9] = {0};
+  int selected_block = 1;
+
   // Find the ground — drop player to surface (now searching through 32 rows)
   while (player_y < CHUNK_SIZE - 1 &&
          world.get_block(player_x, player_y) == BlockType::AIR) {
@@ -502,37 +507,83 @@ int main() {
 
   // Gravity system
   int fall_timer = 0;
-  const int GRAVITY_INTERVAL = 3; // fall 1 block every 3 frames (~6.6 blocks/sec)
-  int jump_fuel = 0;              // frames of upward movement remaining
+  const int GRAVITY_INTERVAL = 5; // fall 1 block every 5 frames
 
   bool running = true;
   while (running) {
-    Action action = get_input();
+    InputState input = get_input();
 
-    // --- 1. INPUT: Horizontal movement ---
+    // --- 1. QUIT ---
+    if (input.quit) {
+      running = false;
+      continue;
+    }
+
+    // --- 2. HORIZONTAL MOVEMENT ---
     int nw_x = player_x;
-
-    switch (action) {
-    case Action::MOVE_LEFT:
+    if (input.move_left) {
       nw_x--;
-      break;
-    case Action::MOVE_RIGHT:
+      facing = -1;
+    }
+    if (input.move_right) {
       nw_x++;
-      break;
-    case Action::MOVE_UP: {
-      // Jump — only if standing on solid ground
+      facing = 1;
+    }
+
+    // --- 3. JUMP (before mining — so you jump first, then mine at new pos) ---
+    if (input.jump) {
       bool on_ground =
           world.get_block(player_x, player_y + 1) != BlockType::AIR;
-      if (on_ground && jump_fuel == 0) {
-        jump_fuel = 3; // jump for 3 frames (3 blocks high)
+      bool above_clear =
+          world.get_block(player_x, player_y - 1) == BlockType::AIR;
+      if (on_ground && above_clear) {
+        player_y--; // hop up 1 block
       }
-      break;
     }
-    case Action::EXIT:
-      running = false;
-      break;
-    default:
-      break;
+
+    // --- 4. MINING (all directions, works in any position) ---
+    if (input.mine_left) {
+      BlockType target = world.get_block(player_x - 1, player_y);
+      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
+        world.set_block(player_x - 1, player_y, BlockType::AIR);
+        inventory[static_cast<int>(target)]++;
+      }
+    }
+    if (input.mine_right) {
+      BlockType target = world.get_block(player_x + 1, player_y);
+      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
+        world.set_block(player_x + 1, player_y, BlockType::AIR);
+        inventory[static_cast<int>(target)]++;
+      }
+    }
+    if (input.mine_up) {
+      BlockType target = world.get_block(player_x, player_y - 1);
+      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
+        world.set_block(player_x, player_y - 1, BlockType::AIR);
+        inventory[static_cast<int>(target)]++;
+        player_y--;       // auto-climb into the mined space
+        fall_timer = 0;   // reset gravity — gives time to mine sideways
+      }
+    }
+    if (input.mine_down) {
+      BlockType target = world.get_block(player_x, player_y + 1);
+      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
+        world.set_block(player_x, player_y + 1, BlockType::AIR);
+        inventory[static_cast<int>(target)]++;
+      }
+    }
+
+    // --- 5. BUILDING ---
+    if (input.place_block) {
+      int place_x = player_x + facing;
+      int place_y = player_y;
+      if (world.get_block(place_x, place_y) == BlockType::AIR) {
+        BlockType block_toplace = static_cast<BlockType>(selected_block);
+        if (inventory[selected_block] > 0) {
+          world.set_block(place_x, place_y, block_toplace);
+          inventory[selected_block]--;
+        }
+      }
     }
 
     // --- 2. HORIZONTAL COLLISION ---
@@ -540,23 +591,12 @@ int main() {
       player_x = nw_x;
     }
 
-    // --- 3. VERTICAL PHYSICS ---
-    if (jump_fuel > 0) {
-      // Rising (jumping)
-      if (world.get_block(player_x, player_y - 1) == BlockType::AIR) {
-        player_y--;
-      } else {
-        jump_fuel = 0; // hit ceiling, stop rising
-      }
-      jump_fuel--;
-    } else {
-      // Gravity: fall every GRAVITY_INTERVAL frames
-      fall_timer++;
-      if (fall_timer >= GRAVITY_INTERVAL) {
-        fall_timer = 0;
-        if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
-          player_y++;
-        }
+    // --- 3. VERTICAL PHYSICS: Gravity only ---
+    fall_timer++;
+    if (fall_timer >= GRAVITY_INTERVAL) {
+      fall_timer = 0;
+      if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
+        player_y++;
       }
     }
 
@@ -586,11 +626,17 @@ int main() {
     screen.set_pixel(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
                      {'$', Color::BRIGHT_CYAN});
 
-    string hud = "Pos: (" + to_string(player_x) + ", " + to_string(player_y) +
-                 ")  [A/D] Walk  [W] Jump  [Q] Quit  Chunks: " +
-                 to_string(world.chunk_count());
+    string hud = "Pos: (" + to_string(player_x) + "," + to_string(player_y) +
+                 ")  [WASD+W]Move  [Arrows]Mine  [Space]Place  [Q]Quit";
+    string inv_hud = "Inv: Grass:" + to_string(inventory[1]) +
+                     " Dirt:" + to_string(inventory[2]) +
+                     " Stone:" + to_string(inventory[3]) +
+                     " Iron:" + to_string(inventory[4]) +
+                     " Gold:" + to_string(inventory[5]) +
+                     " Dia:" + to_string(inventory[6]);
 
     screen.draw_text(0, 0, hud, Color::MAGENTA);
+    screen.draw_text(0, 1, inv_hud, Color::YELLOW);
 
     screen.render();
 
