@@ -49,6 +49,10 @@ inline Pixel block_to_pixel(BlockType b) {
     return {'G', Color::BRIGHT_YELLOW};
   case BlockType::DIAMOND:
     return {'D', Color::BRIGHT_CYAN};
+  case BlockType::WOOD:
+    return {'|', Color::BRIGHT_RED};
+  case BlockType::LEAF:
+    return {'*', Color::BRIGHT_GREEN};
   case BlockType::BEDROCK:
     return {'B', Color::MAGENTA};
   default:

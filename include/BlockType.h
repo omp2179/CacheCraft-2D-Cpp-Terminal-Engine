@@ -10,6 +10,8 @@ enum class BlockType : uint8_t {
   IRON,
   GOLD,
   DIAMOND,
+  WOOD,
+  LEAF,
   BEDROCK,
   COUNT
 };
@@ -30,6 +32,10 @@ inline char block_to_char(BlockType b) {
     return 'G';
   case BlockType::DIAMOND:
     return 'D';
+  case BlockType::WOOD:
+    return '|';
+  case BlockType::LEAF:
+    return '*';
   case BlockType::BEDROCK:
     return 'B';
   default:
@@ -53,6 +59,10 @@ inline std::string block_to_string(BlockType b) {
     return "Gold";
   case BlockType::DIAMOND:
     return "Diamond";
+  case BlockType::WOOD:
+    return "Wood";
+  case BlockType::LEAF:
+    return "Leaf";
   case BlockType::BEDROCK:
     return "Bedrock";
   default:

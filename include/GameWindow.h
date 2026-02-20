@@ -1,4 +1,5 @@
 #pragma once
+#include "Pixel.h"
 #include "Terrain.h"
 #include "Window.h"
 #include "World.h"
@@ -144,7 +145,23 @@ public:
         } else {
           block = world.get_block(wx, wy);
         }
-        screen.set_pixel(sx, sy, block_to_pixel(block));
+        bool is_ore = (block == BlockType::DIAMOND or
+                       block == BlockType::GOLD or block == BlockType::IRON);
+
+        if (is_ore) {
+          bool exposed = world.get_block(wx, wy + 1) == BlockType::AIR or
+                         world.get_block(wx + 1, wy) == BlockType::AIR or
+                         world.get_block(wx - 1, wy) == BlockType::AIR or
+                         world.get_block(wx, wy - 1) == BlockType::AIR;
+
+          if (exposed) {
+            screen.set_pixel(sx, sy, block_to_pixel(block));
+          } else {
+            screen.set_pixel(sx, sy, block_to_pixel(BlockType::STONE));
+          }
+        } else {
+          screen.set_pixel(sx, sy, block_to_pixel(block));
+        }
       }
     }
 

@@ -143,5 +143,24 @@ inline void generate_chunk_terrain(
         blocks[y][x] = BlockType::BEDROCK;
       }
     }
+
+    float tree_noise = hash_noise(wx, seed + 155);
+    if (tree_noise > 0.85f) {
+      int trunk_height = 3 + static_cast<int>(hash_noise(wx, seed + 666) * 3);
+      for (int t = 1; t <= trunk_height; t++) {
+        int ty = surface_y - t;
+        if (ty >= 0) {
+          blocks[ty][x] = BlockType::WOOD;
+        }
+      }
+      int top = surface_y - trunk_height;
+      for (int ly = top - 2; ly <= top; ly++) {
+        for (int lx = x - 1; lx <= x + 1; lx++) {
+          if (ly >= 0 && lx >= 0 && lx < CHUNK_SIZE) {
+            blocks[ly][lx] = BlockType::LEAF;
+          }
+        }
+      }
+    }
   }
 }

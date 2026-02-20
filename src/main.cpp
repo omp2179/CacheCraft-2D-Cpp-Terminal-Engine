@@ -74,7 +74,7 @@ void test_blocktype() {
   cout << "Size: " << sizeof(BlockType) << " byte (uint8_t confirmed)\n";
 
   // 2. COUNT value
-  assert(static_cast<int>(BlockType::COUNT) == 8);
+  assert(static_cast<int>(BlockType::COUNT) == 10);
   cout << "Total types: " << static_cast<int>(BlockType::COUNT) << "\n";
 
   // 3. Char mapping
