@@ -1,13 +1,16 @@
 #include "BlockType.h"
 #include "Chunk.h"
 #include "Coord.h"
+#include "GameWindow.h"
 #include "Input.h"
+#include "InventoryWindow.h"
 #include "Pixel.h"
 #include "ScreenBuffer.h"
 #include "World.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <stack>
 #include <string>
 #include <unordered_map>
 
@@ -492,225 +495,39 @@ int main() {
 
   int player_x = 40;
   int player_y = 0;
-
   int facing = 1;
-
   int inventory[9] = {0};
   int selected_block = 1;
 
-  // Find the ground — drop player to surface (now searching through 32 rows)
   while (player_y < CHUNK_SIZE - 1 &&
          world.get_block(player_x, player_y) == BlockType::AIR) {
     ++player_y;
   }
-  --player_y; // stand ON the surface, not inside it
+  --player_y;
 
-  // Gravity system
-  int fall_timer = 0;
-  const int GRAVITY_INTERVAL = 5; // fall 1 block every 5 frames
+  GameWindow game_window(world, player_x, player_y, facing, inventory,
+                         selected_block);
+  InventoryWindow inv_window(inventory, selected_block);
 
-  bool running = true;
-  bool inventory_open = false;
-  int inventory_cursor = 0;
+  std::stack<Window *> windows;
+  windows.push(&game_window);
 
-  while (running) {
+  while (!windows.empty()) {
     InputState input = get_input();
 
-    // --- 1. QUIT ---
-    if (input.quit) {
-      running = false;
-      continue;
+    bool should_close = windows.top()->handle_input(input);
+    if (should_close) {
+      windows.pop();
+      if (windows.empty())
+        break;
     }
 
-    if (input.open_inventory) {
-      inventory_open = !inventory_open;
-    }
-    if (inventory_open) {
-      if (input.mine_up) {
-        inventory_cursor--;
-      }
-      if (input.mine_down) {
-        inventory_cursor++;
-      }
-
-      if (inventory_cursor < 0) {
-        inventory_cursor = 0;
-      }
-      if (inventory_cursor > 5) {
-        inventory_cursor = 5;
-      }
-
-      screen.clear();
-
-      screen.draw_text(25, 3, "===INVENTORY===", Color::BRIGHT_BLUE);
-
-      string names[] = {"Grass", "Dirt", "Stone", "Iron", "Gold", "Diamond"};
-
-      for (int i = 0; i < 6; ++i) {
-        string prefix = (inventory_cursor == i) ? " >> " : "  ";
-        string line = prefix + "[" + to_string(i + 1) + "]" + names[i] +
-                      "..... " + to_string(inventory[i + 1]);
-
-        Color c =
-            (inventory_cursor == i) ? Color::BRIGHT_GREEN : Color::BRIGHT_WHITE;
-        screen.draw_text(20, 6 + i, line, c);
-      }
-
-      screen.draw_text(20, 14, "[Up/Down] Navigate [Enter] Select [E] Close",
-                       Color::GRAY);
-
-      if (input.confirm_inventory) {
-        inventory_open = false;
-        selected_block = inventory_cursor + 1;
-      }
-
-      screen.render();
-      Sleep(50);
-      continue;
+    if (windows.top() == &game_window && game_window.wants_inventory) {
+      game_window.wants_inventory = false;
+      windows.push(&inv_window);
     }
 
-    // --- 2. HORIZONTAL MOVEMENT ---
-    int nw_x = player_x;
-    if (input.move_left) {
-      nw_x--;
-      facing = -1;
-    }
-    if (input.move_right) {
-      nw_x++;
-      facing = 1;
-    }
-
-    // --- 3. JUMP (before mining — so you jump first, then mine at new pos) ---
-    if (input.jump) {
-      bool on_ground =
-          world.get_block(player_x, player_y + 1) != BlockType::AIR;
-      bool above_clear =
-          world.get_block(player_x, player_y - 1) == BlockType::AIR;
-      if (on_ground && above_clear) {
-        player_y--; // hop up 1 block
-        fall_timer = 0;
-      }
-    }
-
-    // --- 4. MINING (all directions, works in any position) ---
-    if (input.mine_left) {
-      BlockType target = world.get_block(player_x - 1, player_y);
-      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
-        world.set_block(player_x - 1, player_y, BlockType::AIR);
-        inventory[static_cast<int>(target)]++;
-      }
-    }
-    if (input.mine_right) {
-      BlockType target = world.get_block(player_x + 1, player_y);
-      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
-        world.set_block(player_x + 1, player_y, BlockType::AIR);
-        inventory[static_cast<int>(target)]++;
-      }
-    }
-    if (input.mine_up) {
-      BlockType target = world.get_block(player_x, player_y - 1);
-      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
-        world.set_block(player_x, player_y - 1, BlockType::AIR);
-        inventory[static_cast<int>(target)]++;
-        player_y--;     // auto-climb into the mined space
-        fall_timer = 0; // reset gravity — gives time to mine sideways
-      }
-    }
-    if (input.mine_down) {
-      BlockType target = world.get_block(player_x, player_y + 1);
-      if (target != BlockType::AIR && target != BlockType::BEDROCK) {
-        world.set_block(player_x, player_y + 1, BlockType::AIR);
-        inventory[static_cast<int>(target)]++;
-      }
-    }
-
-    // --- 5. BUILDING ---
-    if (input.place_block) {
-      int place_x, place_y;
-
-      bool on_ground = world.get_block(player_x, player_y) != BlockType::AIR;
-
-      if (on_ground) {
-        place_x = player_x + facing;
-        place_y = player_y;
-      } else {
-        place_x = player_x;
-        place_y = player_y + 1;
-      }
-
-      if (world.get_block(place_x, place_y) == BlockType::AIR) {
-        BlockType block_toplace = static_cast<BlockType>(selected_block);
-        if (inventory[selected_block] > 0) {
-          world.set_block(place_x, place_y, block_toplace);
-          inventory[selected_block]--;
-        }
-      }
-    }
-
-    if (input.select_block != 0) {
-      selected_block = input.select_block;
-    }
-
-    // --- 2. HORIZONTAL COLLISION ---
-    if (world.get_block(nw_x, player_y) == BlockType::AIR) {
-      player_x = nw_x;
-    }
-
-    // --- 3. VERTICAL PHYSICS: Gravity only ---
-    fall_timer++;
-    if (fall_timer >= GRAVITY_INTERVAL) {
-      fall_timer = 0;
-      if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
-        player_y++;
-      }
-    }
-
-    // --- 4. RENDER ---
-    screen.clear();
-
-    int cam_x = player_x - SCREEN_WIDTH / 2;
-    int cam_y = player_y - SCREEN_HEIGHT / 2;
-
-    for (int sy = 0; sy < SCREEN_HEIGHT; ++sy) {
-      for (int sx = 0; sx < SCREEN_WIDTH; ++sx) {
-        int wx = cam_x + sx;
-        int wy = cam_y + sy;
-
-        BlockType block;
-        if (wy < 0) {
-          block = BlockType::AIR;
-        } else if (wy >= CHUNK_SIZE) {
-          block = BlockType::BEDROCK;
-        } else {
-          block = world.get_block(wx, wy);
-        }
-        screen.set_pixel(sx, sy, block_to_pixel(block));
-      }
-    }
-
-    screen.set_pixel(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
-                     {'$', Color::BRIGHT_CYAN});
-
-    string hud = "Pos: (" + to_string(player_x) + "," + to_string(player_y) +
-                 ")  [WASD+W]Move  [Arrows]Mine [1-6]Select Inventory Block "
-                 "[Space]Place  [Q]Quit";
-    string inv_hud = "Inv:";
-    inv_hud += (selected_block == 1 ? " >" : "  ");
-    inv_hud += "Grass:" + to_string(inventory[1]);
-    inv_hud += (selected_block == 2 ? " >" : "  ");
-    inv_hud += "Dirt:" + to_string(inventory[2]);
-    inv_hud += (selected_block == 3 ? " >" : "  ");
-    inv_hud += "Stone:" + to_string(inventory[3]);
-    inv_hud += (selected_block == 4 ? " >" : "  ");
-    inv_hud += "Iron:" + to_string(inventory[4]);
-    inv_hud += (selected_block == 5 ? " >" : "  ");
-    inv_hud += "Gold:" + to_string(inventory[5]);
-    inv_hud += (selected_block == 6 ? " >" : "  ");
-    inv_hud += "Dia:" + to_string(inventory[6]);
-
-    screen.draw_text(0, 0, hud, Color::MAGENTA);
-    screen.draw_text(0, 1, inv_hud, Color::YELLOW);
-
+    windows.top()->render(screen);
     screen.render();
 
 #ifdef _WIN32

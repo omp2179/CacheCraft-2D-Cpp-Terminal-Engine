@@ -19,6 +19,16 @@ inline float hash_noise(int x, int seed) {
   return f - 1.0f;
 }
 
+inline float hash_noise_2d(int x, int y, int seed) {
+  int n = x * 374761393 + y * 668265263 + seed * 1274126177;
+  n = (n << 13) ^ n;
+  n = n * (n * n * 15731 + 789221) + 1376312589;
+  unsigned int m = (n & 0x007FFFFF) | 0x3F800000;
+  float f;
+  std::memcpy(&f, &m, sizeof(f));
+  return f - 1.0f;
+}
+
 inline float smooth_noise(float x, int seed) {
   int i = static_cast<int>(x);
   int xi = i - (i > x);
@@ -31,6 +41,24 @@ inline float smooth_noise(float x, int seed) {
   float b = hash_noise(xi + 1, seed);
 
   return a + t * (b - a);
+}
+
+inline float smooth_noise_2d(float x, float y, int seed) {
+  int ix = static_cast<int>(x) - (static_cast<int>(x) > x);
+  int iy = static_cast<int>(y) - (static_cast<int>(y) > y);
+  float fx = x - static_cast<float>(ix);
+  float fy = y - static_cast<float>(iy);
+  float tx = fx * fx * (3.0f - 2.0f * fx);
+  float ty = fy * fy * (3.0f - 2.0f * fy);
+
+  float c00 = hash_noise_2d(ix, iy, seed);
+  float c10 = hash_noise_2d(ix + 1, iy, seed);
+  float c01 = hash_noise_2d(ix, iy + 1, seed);
+  float c11 = hash_noise_2d(ix + 1, iy + 1, seed);
+
+  float a = c00 + tx * (c10 - c00);
+  float b = c01 + tx * (c11 - c01);
+  return a + ty * (b - a);
 }
 
 inline float fbm(float x, int seed, int octaves = 4) {
@@ -50,6 +78,22 @@ inline float fbm(float x, int seed, int octaves = 4) {
     frequency *= lacunarity;
   }
 
+  return value / max_amplitude;
+}
+
+inline float fbm_2d(float x, float y, int seed, int octaves = 4) {
+  float value = 0.0f;
+  float amplitude = 1.0f;
+  float max_amplitude = 0.0f;
+  float frequency = 0.15f;
+  for (int i = 0; i < octaves; i++) {
+    value +=
+        smooth_noise_2d(x * frequency, y * frequency, seed ^ (i * 0x2f2f2f2f)) *
+        amplitude;
+    max_amplitude += amplitude;
+    amplitude *= 0.5f;
+    frequency *= 2.0f;
+  }
   return value / max_amplitude;
 }
 
@@ -77,16 +121,23 @@ inline void generate_chunk_terrain(
         blocks[y][x] = BlockType::DIRT;
       } else if (y < CHUNK_SIZE - 1) {
 
-        float ore_noise = hash_noise(wx * 100 + y, seed + 99);
+        float cave =
+            fbm_2d(static_cast<float>(wx), static_cast<float>(y), seed + 777);
 
-        if (ore_noise > 0.95f) {
-          blocks[y][x] = BlockType::DIAMOND;
-        } else if (ore_noise > 0.88f) {
-          blocks[y][x] = BlockType::GOLD;
-        } else if (ore_noise > 0.80f) {
-          blocks[y][x] = BlockType::IRON;
+        if (cave > 0.55f) {
+          blocks[y][x] = BlockType::AIR;
         } else {
-          blocks[y][x] = BlockType::STONE;
+          float ore_noise = hash_noise(wx * 100 + y, seed + 99);
+
+          if (ore_noise > 0.95f and y > 20) {
+            blocks[y][x] = BlockType::DIAMOND;
+          } else if (ore_noise > 0.88f and y > 15) {
+            blocks[y][x] = BlockType::GOLD;
+          } else if (ore_noise > 0.80f) {
+            blocks[y][x] = BlockType::IRON;
+          } else {
+            blocks[y][x] = BlockType::STONE;
+          }
         }
       } else {
         blocks[y][x] = BlockType::BEDROCK;
