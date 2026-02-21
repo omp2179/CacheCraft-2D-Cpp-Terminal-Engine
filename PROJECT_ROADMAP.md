@@ -18,11 +18,11 @@
 
 ---
 
-## 📊 Overall Progress: ~25%
+## 📊 Overall Progress: ~55%
 
 ```
-Engine Core    ████████████████████░░░░░░░░░░░░░░░░░░░░  ~95%
-Gameplay       ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~0%
+Engine Core    ████████████████████████████████████████  100%
+Gameplay       ████████████████████░░░░░░░░░░░░░░░░░░░░  ~50%
 Advanced CS    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~0%
 Story & Polish ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ~0%
 ```
@@ -70,42 +70,35 @@ Story & Polish ░░░░░░░░░░░░░░░░░░░░░�
 ## 🔜 UPCOMING PHASES
 
 ### Phase 4: Mining & Building
-> Resume: *"mining/building"*
+- [x] Mining in 4 directions (Arrow keys)
+- [x] Building (Space to place selected block)
+- [x] Facing direction tracking
+- [x] Inventory counting + HUD display
+- [x] Mine-up auto-climb + gravity timer reset
+- [x] InputState multi-key support
 
-- [ ] **Mining:** Shift+Arrow to break blocks in a direction
-- [ ] Broken blocks become AIR in the world
-- [ ] Broken blocks go into player inventory
-- [ ] **Building:** Arrow keys to place selected block adjacent to player
-- [ ] **Facing direction:** Track which way player faces (left/right)
-
----
+**Resume claim:** ✅ *"mining/building"*
 
 ### Phase 5: Inventory & Window Stack
-> Resume: *"inventory"* + *"window stack"*
+- [x] Block selection (1-6 number keys) + HUD indicator
+- [x] E key → inventory screen overlay (cursor, Enter to select)
+- [x] Window Stack System (`Window.h` → `GameWindow.h` + `InventoryWindow.h`)
+- [x] Refactored 200-line game loop → 20-line stack loop
 
-- [ ] Inventory data structure (block type → count map)
-- [ ] **E key** opens inventory screen
-- [ ] W/S to scroll items, Enter to select active block
-- [ ] HUD shows selected block type and count
-- [ ] **Window Stack System:** Each screen (game, inventory, pause) is a window pushed/popped from a `std::stack` — topmost renders
-
----
+**Resume claim:** ✅ *"inventory"* + ✅ *"window stack"*
 
 ### Phase 6: Cave Generation
-> Resume: *"Perlin/FBM terrain"* (extends terrain)
+- [x] 2D FBM noise caves (`fbm_2d`, `smooth_noise_2d`, `hash_noise_2d`)
+- [x] Depth-based ore rarity (Diamond y>20, Gold y>15)
+- [x] Cave threshold carving (0.55)
 
-- [ ] **2D Perlin noise caves** — second noise function with threshold to carve cave networks
-- [ ] Deeper caves = rarer ores (Diamond only below depth 20+)
-- [ ] Underground pockets and open caverns
-
----
+**Resume claim:** ✅ *"Perlin/FBM terrain"* (surface + caves)
 
 ### Phase 7: Surface Decoration
-- [ ] **Trees** — trunk blocks (3-5 tall) + leaf canopy
-- [ ] Flowers and tall grass (cosmetic blocks)
-- [ ] Variable terrain biomes (flat plains vs hilly mountains)
+- [x] Trees (noise-based placement, variable trunk height, 3×3 leaf canopy)
+- [x] Hybrid ore visibility (ores visible only when adjacent to AIR)
+- [x] New block types: WOOD, LEAF
 
----
 
 ### Phase 8: Mobs (Enemies + AI)
 > Resume: *"mobs"* + *"SoA mobs with BFS pathfinding (3× faster than AoS)"*
@@ -204,21 +197,20 @@ This is a **critical phase** — it delivers THREE resume claims at once.
 
 Each advanced feature directly supports a resume claim — with **benchmarks to prove it**.
 
-### 1. Bloom Filter — 95% Fewer Chunk Lookups
-> Resume: *"Bloom filters (95% fewer chunk lookups)"*
+### 1. Bloom Filter — Fast Explored Area & Spawn Deduplication
+> Resume (Updated): *"Bloom filters (95% fewer redundant spatial checks)"*
 
-- [ ] **Where:** Fast "has this chunk been generated?" pre-check BEFORE hitting `unordered_map`
-- [ ] **How:** Multiple hash functions → set bits in a bit array → O(1) membership test
+- [ ] **Where:** Mob spawn zone deduplication and explored area tracking.
+- [ ] **How:** Multiple hash functions → set bits in a bit array → O(1) membership test.
 - [ ] **Implementation:**
-  - `BloomFilter` class with configurable size and hash count
-  - Inserted when chunk is created, checked before map lookup
-  - If bloom says NO → skip map (guaranteed correct)
-  - If bloom says YES → check map (might be false positive)
+  - `BloomFilter` class with configurable size and hash count.
+  - When the game checks an area for spawning mobs, it queries the Bloom filter.
+  - If bloom says NO → area is fresh, process spawning, then add to bloom.
+  - If bloom says YES → skip (already processed recently).
 - [ ] **Benchmark:**
-  - Generate 10,000 chunk lookups (mix of existing and non-existing)
-  - Measure: map lookups WITH bloom vs WITHOUT bloom
-  - **Target: 95% fewer map lookups** (most queries are for non-existing chunks during exploration)
-  - Print results: "Bloom filter eliminated X% of map lookups"
+  - Measure 10,000 spawn area checks over time.
+  - **Target: 95% fewer redundant coordinate checks**, saving significant CPU cycles.
+  - Print results: "Bloom filter eliminated X% of redundant spawn location checks"
 
 ### 2. SoA vs AoS — 3× Faster Mob Updates
 > Resume: *"SoA mobs with BFS pathfinding (3× faster than AoS)"*
@@ -258,19 +250,21 @@ Each advanced feature directly supports a resume claim — with **benchmarks to 
 - [ ] **Optimization:** Cache paths, recompute every 30 frames (not every frame)
 - [ ] **Benchmark:** nodes explored vs path length, average pathfinding time
 
-### 4. DP Mining Optimization
-> Resume: *"DP mining optimization"*
+### 4. Dynamic Programming (0/1 Knapsack & Coin Change)
+> Resume (Updated): *"Dynamic Programming for optimal inventory and crafting"*
 
-- [ ] **Where:** Optimal mining path — "what's the most valuable path to mine through a region?"
-- [ ] **How:** Given a grid section, use DP to find the path that maximizes ore value while minimizing blocks broken
-- [ ] **DSA concepts:** 2D dynamic programming, optimal substructure, memoization
-- [ ] **Implementation:**
-  - `dp[y][x]` = maximum ore value reachable from position (x, y) moving down/left/right
-  - Each ore has a value: Diamond=10, Gold=5, Iron=2, Stone=0
-  - Recurrence: `dp[y][x] = value(x,y) + max(dp[y+1][x-1], dp[y+1][x], dp[y+1][x+1])`
-  - Highlight optimal mining path on screen (debug/cheat mode)
-- [ ] **Benchmark:** compare DP optimal path value vs greedy path value
-
+- [ ] **Where:** Inventory management (capacity optimization) and Crafting systems.
+- [ ] **How:** Standard DP algorithms adapted for real gameplay mechanics.
+- [ ] **Implementation 1: 0/1 Knapsack (Inventory Optimization)**
+  - Players have a limited inventory capacity (weight/slots).
+  - Given current items, compute the combination that maximizes total value without exceeding capacity.
+  - Add a "Sort/Optimize" button in the inventory that automatically retains the most valuable haul.
+- [ ] **Implementation 2: Coin Change (Crafting Minimization)**
+  - Given complex crafting recipes (e.g. Iron requires Wood and Stone).
+  - Use DP to compute the exact minimum raw resources needed to craft a target item.
+- [ ] **Benchmark:**
+  - Execute the Knapsack solver on a 100-item inventory vs a greedy approach.
+  - Print results: "DP Inventory Optimization yielded X% more value than greedy algorithm."
 ---
 
 ## 🏗️ Architecture Overview
@@ -285,15 +279,14 @@ Each advanced feature directly supports a resume claim — with **benchmarks to 
 │  Input → Physics → Mob AI → World Update → Render   │
 ├─────────────────────────────────────────────────────┤
 │                    WORLD ENGINE                      │
-│  World → BloomFilter → ChunkMap → Chunks → Blocks   │
-│              (95% fewer lookups)                     │
+│  World → ChunkMap → Chunks → Blocks                 │
 ├─────────────────────────────────────────────────────┤
 │                  MOB ENGINE (SoA)                    │
-│  SoA Storage → BFS Pathfinding → AI State Machine   │
+│  SoA Storage → BFS Pathfinding → Bloom Deduplication│
 │       (3× faster than AoS, benchmarked)             │
 ├─────────────────────────────────────────────────────┤
 │                 OPTIMIZATION LAYER                   │
-│  DP Mining Path → Bloom Chunk Check → SoA Iteration │
+│  DP Knapsack/Crafting → Bloom Deduplication         │
 │            (all benchmarked and validated)           │
 ├─────────────────────────────────────────────────────┤
 │                    DATA LAYER                        │
@@ -308,20 +301,20 @@ Each advanced feature directly supports a resume claim — with **benchmarks to 
 | Resume Claim | Phase(s) | Status |
 |---|---|---|
 | *"infinite chunked world"* | Phase 2 | ✅ Done |
-| *"Perlin/FBM terrain"* | Phase 2 + 6 | ✅ Partially (caves pending) |
-| *"mining/building"* | Phase 4 | ❌ Next |
-| *"mobs"* | Phase 8 | ❌ Planned |
-| *"inventory"* | Phase 5 | ❌ Planned |
+| *"Perlin/FBM terrain"* | Phase 2 + 6 | ✅ Done |
+| *"mining/building"* | Phase 4 | ✅ Done |
+| *"mobs"* | Phase 8 | ❌ Next |
+| *"inventory"* | Phase 5 | ✅ Done |
 | *"save/load"* | Phase 11 | ❌ Planned |
 | *"Windows console"* | Phase 0-3 | ✅ Done |
 | *"OOP engine (Chunk/World/ScreenBuffer)"* | Phase 1-3 | ✅ Done |
-| *"window stack"* | Phase 5 | ❌ Planned |
+| *"window stack"* | Phase 5 | ✅ Done |
 | *"60 FPS loop"* | Phase 12 | ❌ Planned |
-| *"SoA mobs"* | Phase 8 | ❌ Planned |
-| *"BFS pathfinding"* | Phase 8 | ❌ Planned |
-| *"3× faster than AoS"* | Phase 8 benchmark | ❌ Planned |
-| *"Bloom filters (95% fewer lookups)"* | Advanced CS #1 | ❌ Planned |
-| *"DP mining optimization"* | Advanced CS #4 | ❌ Planned |
+| *"SoA mobs"* | Phase 8 | ❌ Next |
+| *"BFS pathfinding"* | Phase 8 | ❌ Next |
+| *"3× faster than AoS"* | Phase 8 benchmark | ❌ Next |
+| *"Bloom filters"* | Advanced CS #1 | ❌ Planned |
+| *"DP Knapsack/Crafting"* | Advanced CS #4 | ❌ Planned |
 | *"validated with benchmarks"* | All advanced CS phases | ❌ Planned |
 
 ---

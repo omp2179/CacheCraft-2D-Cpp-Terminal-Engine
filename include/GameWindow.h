@@ -1,4 +1,9 @@
 #pragma once
+#include "BlockType.h"
+#include "Coord.h"
+#include "Mob.h"
+#include "MobStorage.h"
+#include "Pathfinding.h"
 #include "Pixel.h"
 #include "Terrain.h"
 #include "Window.h"
@@ -7,6 +12,7 @@
 
 class GameWindow : public Window {
 private:
+  MobStorage mobs;
   World &world;
   int &player_x;
   int &player_y;
@@ -15,6 +21,11 @@ private:
   int &selected_block;
   int fall_timer = 0;
   const int GRAVITY_INTERVAL = 5;
+
+  int spawn_timer = 0;
+  const int SPAWN_INTERVAL = 120;
+  const int MOB_MOVE_INTERVAL = 10;
+  int mob_move_timer = 0;
 
 public:
   bool wants_inventory = false;
@@ -123,6 +134,55 @@ public:
       }
     }
 
+    ++spawn_timer;
+    if (spawn_timer >= SPAWN_INTERVAL) {
+      spawn_timer = 0;
+
+      int offset = (rand() % 31) + 15;
+      if (!(rand() & 1)) {
+        offset = -offset;
+      }
+
+      int spawn_x = player_x + offset;
+      int spawn_y = player_y;
+
+      while (spawn_y < CHUNK_SIZE - 1 and
+             world.get_block(spawn_x, spawn_y) == BlockType::AIR) {
+        ++spawn_y;
+      }
+      --spawn_y;
+
+      if (spawn_y > 0) {
+        mobs.add(spawn_x, spawn_y, 20, MobType::ZOMBIE, AIState::CHASING);
+      }
+    }
+
+    ++mob_move_timer;
+    if (mob_move_timer >= MOB_MOVE_INTERVAL) {
+      mob_move_timer = 0;
+
+      Coord player_pos = {player_x, player_y};
+
+      for (size_t i = 0; i < mobs.count(); ++i) {
+        Coord mob_pos = mobs.get_pos(i);
+
+        std::vector<Coord> path = bfs_findpath(mob_pos, player_pos, world, 30);
+
+        if (path.size() >= 2) {
+          mobs.set_pos(i, path[1]);
+        } else {
+          if (world.get_block(mob_pos.x, mob_pos.y + 1) == BlockType::AIR) {
+            mobs.set_pos(i, {mob_pos.x, mob_pos.y + 1});
+          }
+        }
+
+        Coord new_pos = mobs.get_pos(i);
+        if (world.get_block(new_pos.x, new_pos.y + 1) == BlockType::AIR) {
+          mobs.set_pos(i, {new_pos.x, new_pos.y + 1});
+        }
+      }
+    }
+
     return false;
   }
 
@@ -167,6 +227,14 @@ public:
 
     screen.set_pixel(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
                      {'$', Color::BRIGHT_CYAN});
+
+    for (size_t i = 0; i < mobs.count(); ++i) {
+      int sx = mobs.x[i] - cam_x;
+      int sy = mobs.y[i] - cam_y;
+      if (sx >= 0 && sx < SCREEN_WIDTH && sy >= 0 && sy < SCREEN_HEIGHT) {
+        screen.set_pixel(sx, sy, mob_to_pixel(mobs.type[i]));
+      }
+    }
 
     std::string hud = "Pos: (" + std::to_string(player_x) + "," +
                       std::to_string(player_y) +

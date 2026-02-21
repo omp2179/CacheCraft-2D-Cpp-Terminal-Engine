@@ -9,6 +9,8 @@
 #include "World.h"
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <stack>
 #include <string>
@@ -504,6 +506,8 @@ int main() {
     ++player_y;
   }
   --player_y;
+
+  srand(static_cast<unsigned>(time(nullptr)));
 
   GameWindow game_window(world, player_x, player_y, facing, inventory,
                          selected_block);
