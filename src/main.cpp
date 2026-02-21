@@ -1,6 +1,8 @@
+#include "Benchmark.h"
 #include "BlockType.h"
 #include "Chunk.h"
 #include "Coord.h"
+#include "FastRand.h"
 #include "GameWindow.h"
 #include "Input.h"
 #include "InventoryWindow.h"
@@ -484,6 +486,7 @@ int main() {
   test_world();
   test_terrain();
   // test_screenbuffer();
+  run_aos_vs_soa_benchmark();
 
   cout << "\n=== ALL TESTS PASSED! ===\n";
   cout << "Starting game in 3 seconds...\n";
@@ -507,7 +510,7 @@ int main() {
   }
   --player_y;
 
-  srand(static_cast<unsigned>(time(nullptr)));
+  seed_fast_rand(static_cast<unsigned>(time(nullptr)));
 
   GameWindow game_window(world, player_x, player_y, facing, inventory,
                          selected_block);

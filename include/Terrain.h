@@ -8,7 +8,9 @@
 constexpr int CHUNK_SIZE = 32;
 
 inline float hash_noise(int x, int seed) {
-  int n = x * 374761393 + seed * 668265263;
+  unsigned int n = static_cast<unsigned int>(x) * 374761393u +
+                   static_cast<unsigned int>(seed) * 668265263u;
+
   n = (n << 13) ^ n;
   n = n * (n * n * 15731 + 789221) + 668265263;
   unsigned int m = (n & 0x007FFFFF) | 0x3F800000;
@@ -20,7 +22,10 @@ inline float hash_noise(int x, int seed) {
 }
 
 inline float hash_noise_2d(int x, int y, int seed) {
-  int n = x * 374761393 + y * 668265263 + seed * 1274126177;
+  unsigned int n = static_cast<unsigned int>(x) * 374761393u +
+                   static_cast<unsigned int>(y) * 668265263u +
+                   static_cast<unsigned int>(seed) * 1274126177u;
+
   n = (n << 13) ^ n;
   n = n * (n * n * 15731 + 789221) + 1376312589;
   unsigned int m = (n & 0x007FFFFF) | 0x3F800000;
@@ -72,7 +77,12 @@ inline float fbm(float x, int seed, int octaves = 4) {
   const float gain = 0.5f;
 
   for (int i = 0; i < octaves; i++) {
-    value += smooth_noise(x * frequency, seed ^ (i * 0x1f1f1f1f)) * amplitude;
+    value += smooth_noise(
+                 x * frequency,
+                 static_cast<int>(static_cast<unsigned>(seed) ^
+                                  (static_cast<unsigned>(i) * 0x1f1f1f1fu))) *
+             amplitude;
+
     max_amplitude += amplitude;
     amplitude *= gain;
     frequency *= lacunarity;
@@ -87,9 +97,12 @@ inline float fbm_2d(float x, float y, int seed, int octaves = 4) {
   float max_amplitude = 0.0f;
   float frequency = 0.15f;
   for (int i = 0; i < octaves; i++) {
-    value +=
-        smooth_noise_2d(x * frequency, y * frequency, seed ^ (i * 0x2f2f2f2f)) *
-        amplitude;
+    value += smooth_noise_2d(
+                 x * frequency, y * frequency,
+                 static_cast<int>(static_cast<unsigned>(seed) ^
+                                  (static_cast<unsigned>(i) * 0x2f2f2f2fu))) *
+             amplitude;
+
     max_amplitude += amplitude;
     amplitude *= 0.5f;
     frequency *= 2.0f;

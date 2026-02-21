@@ -14,20 +14,16 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
   }
 
   std::queue<Coord> qq;
-
   qq.push(s);
 
   std::unordered_map<Coord, Coord, CoordHash> parent;
-  std::unordered_map<Coord, int, CoordHash> dist;
-
-  dist[s] = 0;
   parent[s] = s;
 
   int depth = 0;
   int current_level_rem = 1;
   int next_level_cnt = 0;
 
-  const Coord dirs[] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}, {-1, -1}, {1, -1}};
+  const Coord dirs[] = {{-1, 0}, {1, 0}, {0, 1}, {0, -1}, {-1, -1}, {1, -1}};
 
   while (!qq.empty() and depth < max_depth) {
     Coord cur = qq.front();
@@ -40,13 +36,11 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
     for (const Coord &dir : dirs) {
       Coord nei = cur + dir;
 
-      if (parent.count(nei)) {
+      if (parent.count(nei))
         continue;
-      }
 
-      if (world.get_block(nei.x, nei.y) != BlockType::AIR) {
+      if (world.get_block(nei.x, nei.y) != BlockType::AIR)
         continue;
-      }
 
       if (dir.y == -1 and dir.x != 0) {
         if (world.get_block(cur.x + dir.x, cur.y) == BlockType::AIR) {
@@ -54,8 +48,25 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
         }
       }
 
+      if (dir.y == -1 and dir.x == 0) {
+        if (world.get_block(cur.x, cur.y + 1) == BlockType::AIR) {
+          continue;
+        }
+      }
+
+      if (dir.y == 0) {
+        bool has_ground = false;
+        for (int fall = 1; fall <= 3; fall++) {
+          if (world.get_block(nei.x, nei.y + fall) != BlockType::AIR) {
+            has_ground = true;
+            break;
+          }
+        }
+        if (!has_ground)
+          continue;
+      }
+
       parent[nei] = cur;
-      dist[nei] = dist[cur] + 1;
       qq.push(nei);
       ++next_level_cnt;
     }

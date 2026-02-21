@@ -1,6 +1,7 @@
 #pragma once
 #include "BlockType.h"
 #include "Coord.h"
+#include "FastRand.h"
 #include "Mob.h"
 #include "MobStorage.h"
 #include "Pathfinding.h"
@@ -138,8 +139,9 @@ public:
     if (spawn_timer >= SPAWN_INTERVAL) {
       spawn_timer = 0;
 
-      int offset = (rand() % 31) + 15;
-      if (!(rand() & 1)) {
+      uint32_t r = fast_rand();
+      int offset = (r & 31) + 15;
+      if (r&32) {
         offset = -offset;
       }
 
@@ -166,6 +168,13 @@ public:
       for (size_t i = 0; i < mobs.count(); ++i) {
         Coord mob_pos = mobs.get_pos(i);
 
+        int dx=mob_pos.x-player_x;
+        int dy=mob_pos.y-player_y;
+
+        if((dx*dx+dy*dy)>3600){
+          continue;
+        }
+
         std::vector<Coord> path = bfs_findpath(mob_pos, player_pos, world, 30);
 
         if (path.size() >= 2) {
@@ -174,11 +183,6 @@ public:
           if (world.get_block(mob_pos.x, mob_pos.y + 1) == BlockType::AIR) {
             mobs.set_pos(i, {mob_pos.x, mob_pos.y + 1});
           }
-        }
-
-        Coord new_pos = mobs.get_pos(i);
-        if (world.get_block(new_pos.x, new_pos.y + 1) == BlockType::AIR) {
-          mobs.set_pos(i, {new_pos.x, new_pos.y + 1});
         }
       }
     }
