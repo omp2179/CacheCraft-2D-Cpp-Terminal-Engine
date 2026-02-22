@@ -5,6 +5,7 @@ struct InputState {
   bool move_left = false;
   bool move_right = false;
   bool jump = false;
+  bool move_down = false;
   bool mine_left = false;
   bool mine_right = false;
   bool mine_up = false;
@@ -14,6 +15,7 @@ struct InputState {
   int select_block = 0;
   bool open_inventory = false;
   bool confirm_inventory = false;
+  bool open_pause=false;
 };
 
 inline InputState get_input() {
@@ -53,6 +55,10 @@ inline InputState get_input() {
       case 'D':
         state.move_right = true;
         break;
+      case 's':
+      case 'S':
+        state.move_down = true;
+        break;
       case 'w':
       case 'W':
         state.jump = true;
@@ -67,6 +73,10 @@ inline InputState get_input() {
       case 'e':
       case 'E':
         state.open_inventory = true;
+        break;
+      case 'p':
+      case 'P':
+        state.open_pause = true;
         break;
       case '1':
         state.select_block = 1;

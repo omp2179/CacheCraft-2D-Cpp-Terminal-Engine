@@ -1,5 +1,6 @@
 #pragma once
 #include "BlockType.h"
+#include "CheatState.h"
 #include "Coord.h"
 #include "FastRand.h"
 #include "Mob.h"
@@ -22,6 +23,7 @@ private:
   int &selected_block;
   int fall_timer = 0;
   const int GRAVITY_INTERVAL = 5;
+  CheatState &cheats;
 
   int spawn_timer = 0;
   const int SPAWN_INTERVAL = 120;
@@ -31,10 +33,12 @@ private:
 public:
   bool wants_inventory = false;
   bool wants_quit = false;
+  bool wants_pause = false;
 
-  GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel)
+  GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel,
+             CheatState &cs)
       : world(w), player_x(px), player_y(py), facing(f), inventory(inv),
-        selected_block(sel) {}
+        selected_block(sel), cheats(cs) {}
 
   bool handle_input(const InputState &input) override {
     if (input.quit) {
@@ -44,6 +48,11 @@ public:
 
     if (input.open_inventory) {
       wants_inventory = true;
+      return false;
+    }
+
+    if (input.open_pause) {
+      wants_pause = true;
       return false;
     }
 
@@ -58,13 +67,17 @@ public:
     }
 
     if (input.jump) {
-      bool on_ground =
-          world.get_block(player_x, player_y + 1) != BlockType::AIR;
-      bool above_clear =
-          world.get_block(player_x, player_y - 1) == BlockType::AIR;
-      if (on_ground && above_clear) {
-        player_y--;
-        fall_timer = 0;
+      if (cheats.spectator_mode) {
+        --player_y;
+      } else {
+        bool on_ground =
+            world.get_block(player_x, player_y + 1) != BlockType::AIR;
+        bool above_clear =
+            world.get_block(player_x, player_y - 1) == BlockType::AIR;
+        if (on_ground && above_clear) {
+          player_y--;
+          fall_timer = 0;
+        }
       }
     }
 
@@ -123,15 +136,36 @@ public:
       selected_block = input.select_block;
     }
 
-    if (world.get_block(nw_x, player_y) == BlockType::AIR) {
+    if (cheats.spectator_mode or
+        world.get_block(nw_x, player_y) == BlockType::AIR) {
       player_x = nw_x;
     }
 
-    fall_timer++;
-    if (fall_timer >= GRAVITY_INTERVAL) {
-      fall_timer = 0;
-      if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
-        player_y++;
+    if (cheats.speed_boost) {
+      int nw_x2 = player_x;
+      if (input.move_left)
+        nw_x2--;
+      if (input.move_right)
+        nw_x2++;
+      if (cheats.spectator_mode or
+          world.get_block(nw_x2, player_y) == BlockType::AIR) {
+        player_x = nw_x2;
+      }
+    }
+
+    if (!cheats.spectator_mode) {
+      fall_timer++;
+      if (fall_timer >= GRAVITY_INTERVAL) {
+        fall_timer = 0;
+        if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
+          player_y++;
+        }
+      }
+    }
+
+    if (input.move_down) {
+      if (cheats.spectator_mode) {
+        ++player_y;
       }
     }
 
@@ -141,7 +175,7 @@ public:
 
       uint32_t r = fast_rand();
       int offset = (r & 31) + 15;
-      if (r&32) {
+      if (r & 32) {
         offset = -offset;
       }
 
@@ -168,10 +202,10 @@ public:
       for (size_t i = 0; i < mobs.count(); ++i) {
         Coord mob_pos = mobs.get_pos(i);
 
-        int dx=mob_pos.x-player_x;
-        int dy=mob_pos.y-player_y;
+        int dx = mob_pos.x - player_x;
+        int dy = mob_pos.y - player_y;
 
-        if((dx*dx+dy*dy)>3600){
+        if ((dx * dx + dy * dy) > 3600) {
           continue;
         }
 

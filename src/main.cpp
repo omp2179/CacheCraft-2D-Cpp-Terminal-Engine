@@ -1,11 +1,14 @@
 #include "Benchmark.h"
 #include "BlockType.h"
+#include "CheatState.h"
+#include "CheatWindow.h"
 #include "Chunk.h"
 #include "Coord.h"
 #include "FastRand.h"
 #include "GameWindow.h"
 #include "Input.h"
 #include "InventoryWindow.h"
+#include "PauseWindow.h"
 #include "Pixel.h"
 #include "ScreenBuffer.h"
 #include "World.h"
@@ -497,6 +500,7 @@ int main() {
 
   World world;
   ScreenBuffer screen;
+  CheatState cheats;
 
   int player_x = 40;
   int player_y = 0;
@@ -513,8 +517,13 @@ int main() {
   seed_fast_rand(static_cast<unsigned>(time(nullptr)));
 
   GameWindow game_window(world, player_x, player_y, facing, inventory,
-                         selected_block);
+                         selected_block, cheats);
+
   InventoryWindow inv_window(inventory, selected_block);
+
+  PauseWindow pause_window;
+
+  CheatWindow cheat_window(cheats, inventory);
 
   std::stack<Window *> windows;
   windows.push(&game_window);
@@ -532,6 +541,21 @@ int main() {
     if (windows.top() == &game_window && game_window.wants_inventory) {
       game_window.wants_inventory = false;
       windows.push(&inv_window);
+    }
+
+    if (windows.top() == &game_window && game_window.wants_pause) {
+      game_window.wants_pause = false;
+      windows.push(&pause_window);
+    }
+
+    if (windows.top() == &pause_window && pause_window.wants_cheat) {
+      pause_window.wants_cheat = false;
+      windows.pop();
+      windows.push(&cheat_window);
+    }
+
+    if (windows.top() == &pause_window && pause_window.wants_quit) {
+      break;
     }
 
     windows.top()->render(screen);
