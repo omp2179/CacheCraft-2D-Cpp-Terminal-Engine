@@ -7,7 +7,7 @@
 #include <vector>
 
 inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
-                                       int max_depth = 50) {
+                                       int max_depth = 80) {
 
   if (s == tar) {
     return {s};
@@ -23,7 +23,8 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
   int current_level_rem = 1;
   int next_level_cnt = 0;
 
-  const Coord dirs[] = {{-1, 0}, {1, 0}, {0, 1}, {0, -1}, {-1, -1}, {1, -1}};
+  const Coord dirs[] = {{-1, 0},  {1, 0},  {0, 1},  {0, -1},
+                        {-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
 
   while (!qq.empty() and depth < max_depth) {
     Coord cur = qq.front();
@@ -55,15 +56,15 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
       }
 
       if (dir.y == 0) {
-        bool has_ground = false;
-        for (int fall = 1; fall <= 3; fall++) {
-          if (world.get_block(nei.x, nei.y + fall) != BlockType::AIR) {
-            has_ground = true;
-            break;
-          }
-        }
-        if (!has_ground)
+        if (world.get_block(nei.x, nei.y + 1) == BlockType::AIR) {
           continue;
+        }
+      }
+
+      if (dir.y == 1 and dir.x != 0) {
+        if (world.get_block(nei.x, nei.y + 1) == BlockType::AIR) {
+          continue;
+        }
       }
 
       parent[nei] = cur;

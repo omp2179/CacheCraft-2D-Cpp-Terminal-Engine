@@ -24,6 +24,13 @@ private:
   int fall_timer = 0;
   const int GRAVITY_INTERVAL = 5;
   CheatState &cheats;
+  int hp = 100;
+  int max_hp = 100;
+  int fall_distance = 0;
+  int spawn_x = 0;
+  int spawn_y = 0;
+  int damage_cooldown = 0;
+  bool is_dead = false;
 
   int spawn_timer = 0;
   const int SPAWN_INTERVAL = 120;
@@ -38,7 +45,7 @@ public:
   GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel,
              CheatState &cs)
       : world(w), player_x(px), player_y(py), facing(f), inventory(inv),
-        selected_block(sel), cheats(cs) {}
+        selected_block(sel), cheats(cs), spawn_x(px), spawn_y(py) {}
 
   bool handle_input(const InputState &input) override {
     if (input.quit) {
@@ -77,6 +84,7 @@ public:
         if (on_ground && above_clear) {
           player_y--;
           fall_timer = 0;
+          fall_distance = 0;
         }
       }
     }
@@ -159,6 +167,15 @@ public:
         fall_timer = 0;
         if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
           player_y++;
+          fall_distance++;
+        } else {
+          if (fall_distance > 3 && !cheats.god_mode) {
+            int damage = (fall_distance - 3) * 10;
+            hp -= damage;
+            if (hp < 0)
+              hp = 0;
+          }
+          fall_distance = 0;
         }
       }
     }
@@ -209,16 +226,62 @@ public:
           continue;
         }
 
-        std::vector<Coord> path = bfs_findpath(mob_pos, player_pos, world, 30);
-
-        if (path.size() >= 2) {
-          mobs.set_pos(i, path[1]);
-        } else {
-          if (world.get_block(mob_pos.x, mob_pos.y + 1) == BlockType::AIR) {
-            mobs.set_pos(i, {mob_pos.x, mob_pos.y + 1});
+        // 1. STRICT GRAVITY: If in mid-air, you MUST fall down. No AI allowed.
+        if (world.get_block(mob_pos.x, mob_pos.y + 1) == BlockType::AIR) {
+          mobs.set_pos(i, {mob_pos.x, mob_pos.y + 1});
+        } 
+        // 2. ON GROUND: Use AI to pathfind to player
+        else {
+          std::vector<Coord> path = bfs_findpath(mob_pos, player_pos, world, 150);
+          if (path.size() >= 2) {
+            mobs.set_pos(i, path[1]);
           }
         }
       }
+    }
+
+    if (damage_cooldown > 0) {
+      damage_cooldown--;
+    }
+
+    if (!cheats.god_mode && damage_cooldown == 0) {
+      for (size_t i = 0; i < mobs.count(); ++i) {
+        int dx = mobs.x[i] - player_x;
+        int dy = mobs.y[i] - player_y;
+        if (dx * dx + dy * dy <= 4) {
+          hp -= 10;
+          if (hp < 0)
+            hp = 0;
+          damage_cooldown = 40;
+
+          int knockback_x = (dx <= 0) ? 1 : -1;
+          for (int k = 0; k < 2; k++) {
+            int nx = player_x + knockback_x;
+            if (cheats.spectator_mode ||
+                world.get_block(nx, player_y) == BlockType::AIR) {
+              player_x = nx;
+            }
+          }
+
+          break;
+        }
+      }
+    }
+
+    if (hp <= 0 && !is_dead) {
+      is_dead = true;
+    }
+
+    if (is_dead) {
+      if (input.confirm_inventory) {
+        hp = max_hp;
+        player_x = spawn_x;
+        player_y = spawn_y;
+        fall_distance = 0;
+        damage_cooldown = 60;
+        is_dead = false;
+      }
+      return false;
     }
 
     return false;
@@ -226,6 +289,12 @@ public:
 
   void render(ScreenBuffer &screen) override {
     screen.clear();
+
+    if (is_dead) {
+      screen.draw_text(30, 10, "YOU DIED!", Color::BRIGHT_RED);
+      screen.draw_text(25, 13, "[Press Enter to Respawn]", Color::GRAY);
+      return;
+    }
 
     int cam_x = player_x - SCREEN_WIDTH / 2;
     int cam_y = player_y - SCREEN_HEIGHT / 2;
@@ -295,6 +364,19 @@ public:
 
     screen.draw_text(0, 0, hud, Color::MAGENTA);
     screen.draw_text(0, 1, inv_hud, Color::YELLOW);
+
+    std::string hp_bar = "HP: [";
+    int filled = (hp * 20) / max_hp;
+    for (int i = 0; i < 20; i++) {
+      hp_bar += (i < filled) ? '#' : '.';
+    }
+    hp_bar += "] " + std::to_string(hp) + "/" + std::to_string(max_hp);
+    if (cheats.god_mode)
+      hp_bar += " [GOD]";
+    Color hp_color = (hp > 50)   ? Color::BRIGHT_GREEN
+                     : (hp > 20) ? Color::YELLOW
+                                 : Color::BRIGHT_RED;
+    screen.draw_text(0, 2, hp_bar, hp_color);
   }
 
   bool is_opaque() const override { return true; }
