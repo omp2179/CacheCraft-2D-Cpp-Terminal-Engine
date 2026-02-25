@@ -6,10 +6,12 @@
 #include "Coord.h"
 #include "FastRand.h"
 #include "GameWindow.h"
+#include "HashBenchmark.h"
 #include "Input.h"
 #include "InventoryWindow.h"
 #include "PauseWindow.h"
 #include "Pixel.h"
+#include "RobinHoodMap.h"
 #include "ScreenBuffer.h"
 #include "World.h"
 #include <cassert>
@@ -57,7 +59,7 @@ void test_coord() {
   assert(!(a == b));
   cout << a << " == " << a_copy << " : true\n";
 
-  // 4. HashMap with CoordHash
+  // 4. HashMap with CoordHash (std::unordered_map — legacy)
   unordered_map<Coord, string, CoordHash> map;
   map[{0, 0}] = "Origin";
   map[{10, 5}] = "Chunk_1_0";
@@ -68,7 +70,17 @@ void test_coord() {
   assert(val2 == "Chunk_1_0");
   auto val3 = map.count({99, 99});
   assert(val3 == 0);
-  cout << "HashMap: 3 inserted, lookup works, missing key returns 0\n";
+  cout << "HashMap (unordered_map): 3 inserted, lookup works\n";
+
+  // 5. RobinHoodMap with CoordHash (new!)
+  RobinHoodMap<Coord, string, CoordHash> rmap;
+  rmap[{0, 0}] = "Origin";
+  rmap[{10, 5}] = "Chunk_1_0";
+  rmap[{-5, 3}] = "Negative";
+  assert((rmap[{0, 0}] == "Origin"));
+  assert((rmap[{10, 5}] == "Chunk_1_0"));
+  assert((rmap.count({99, 99}) == 0));
+  cout << "HashMap (RobinHoodMap): 3 inserted, lookup works\n";
 
   cout << "All Coord tests PASSED!\n\n";
 }
@@ -173,8 +185,8 @@ void test_integration() {
   cout << "Block at " << world_pos << " is " << block_to_string(block) << " -> "
        << visual << "\n";
 
-  // Store in a world map
-  unordered_map<Coord, BlockType, CoordHash> world;
+  // Store in a world map (using RobinHoodMap!)
+  RobinHoodMap<Coord, BlockType, CoordHash> world;
   world[world_pos] = BlockType::DIAMOND;
   world[{0, 0}] = BlockType::GRASS;
   world[{0, 5}] = BlockType::STONE;
@@ -182,7 +194,7 @@ void test_integration() {
   cout << "World map has " << world.size() << " blocks stored\n";
 
   // Retrieve and display
-  for (auto &[pos, type] : world) {
+  for (auto [pos, type] : world) {
     cout << "  " << pos << " : " << block_to_pixel(type) << " "
          << block_to_string(type) << "\n";
   }
@@ -476,6 +488,107 @@ void test_screenbuffer() {
 #endif
 }
 
+void test_robinhood() {
+  cout << "\n=== ROBINHOOD MAP TESTS ===\n";
+
+  // 1. Basic insert and lookup
+  RobinHoodMap<Coord, int, CoordHash> rmap;
+  rmap[{0, 0}] = 42;
+  rmap[{1, 2}] = 99;
+  rmap[{-5, 3}] = 77;
+  assert((rmap[{0, 0}] == 42));
+  assert((rmap[{1, 2}] == 99));
+  assert((rmap[{-5, 3}] == 77));
+  assert(rmap.size() == 3);
+  cout << "Basic insert/lookup: correct\n";
+
+  // 2. Count (exists vs missing)
+  assert((rmap.count({0, 0}) == 1));
+  assert((rmap.count({999, 999}) == 0));
+  cout << "Count: correct\n";
+
+  // 3. Find
+  auto it = rmap.find({1, 2});
+  assert(it != rmap.end());
+  auto [k, v] = *it;
+  assert(k.x == 1 && k.y == 2);
+  assert(v == 99);
+  assert((rmap.find({888, 888}) == rmap.end()));
+  cout << "Find: correct\n";
+
+  // 4. Overwrite existing key
+  rmap[{0, 0}] = 100;
+  assert((rmap[{0, 0}] == 100));
+  assert(rmap.size() == 3); // size unchanged
+  cout << "Overwrite: correct\n";
+
+  // 5. Erase
+  assert((rmap.erase({1, 2}) == true));
+  assert((rmap.count({1, 2}) == 0));
+  assert(rmap.size() == 2);
+  assert((rmap.erase({999, 999}) == false)); // erase non-existent
+  cout << "Erase: correct\n";
+
+  // 6. Growth/rehash — insert many entries to trigger multiple grows
+  RobinHoodMap<Coord, int, CoordHash> big_map;
+  for (int i = 0; i < 1000; ++i) {
+    Coord bk = {i, i * 3};
+    big_map[bk] = i;
+  }
+  assert(big_map.size() == 1000);
+  // Verify all still findable after rehashes
+  bool all_found = true;
+  for (int i = 0; i < 1000; ++i) {
+    Coord bk = {i, i * 3};
+    if (big_map.count(bk) != 1) {
+      all_found = false;
+      break;
+    }
+    if (big_map[bk] != i) {
+      all_found = false;
+      break;
+    }
+  }
+  assert(all_found);
+  cout << "Growth/rehash (1000 entries): correct\n";
+
+  // 7. Iteration — count entries via range-for
+  int iter_count = 0;
+  for (auto [key, val] : big_map) {
+    (void)key;
+    (void)val;
+    ++iter_count;
+  }
+  assert(iter_count == 1000);
+  cout << "Iteration: correct (" << iter_count << " entries)\n";
+
+  // 8. Negative coordinates (important for Minecraft chunks)
+  RobinHoodMap<Coord, string, CoordHash> neg_map;
+  neg_map[{-10, -20}] = "neg_chunk";
+  neg_map[{-1, 0}] = "border";
+  assert((neg_map[{-10, -20}] == "neg_chunk"));
+  assert((neg_map[{-1, 0}] == "border"));
+  cout << "Negative coords: correct\n";
+
+  // 9. Clear
+  big_map.clear();
+  assert(big_map.size() == 0);
+  assert(big_map.empty());
+  assert((big_map.find({0, 0}) == big_map.end()));
+  cout << "Clear: correct\n";
+
+  // 10. Empty map operations
+  RobinHoodMap<Coord, int, CoordHash> empty_map;
+  assert(empty_map.size() == 0);
+  assert(empty_map.empty());
+  assert((empty_map.find({0, 0}) == empty_map.end()));
+  assert((empty_map.count({0, 0}) == 0));
+  assert((empty_map.erase({0, 0}) == false));
+  cout << "Empty map ops: correct\n";
+
+  cout << "All RobinHood Map tests PASSED!\n";
+}
+
 int main() {
 #ifdef _WIN32
   enable_virtual_terminal();
@@ -488,8 +601,10 @@ int main() {
   test_chunk();
   test_world();
   test_terrain();
+  test_robinhood();
   // test_screenbuffer();
   run_aos_vs_soa_benchmark();
+  run_hash_benchmark();
 
   cout << "\n=== ALL TESTS PASSED! ===\n";
   cout << "Starting game in 3 seconds...\n";

@@ -239,6 +239,21 @@ Each advanced feature directly supports a resume claim — with **benchmarks to 
 - [ ] **Benchmark:**
   - Execute the Knapsack solver on a 100-item inventory vs a greedy approach.
   - Print results: "DP Inventory Optimization yielded X% more value than greedy algorithm."
+
+### 5. Robin Hood Hash Map — Cache-Friendly Custom HashMap ✅
+> Resume: *"Custom HashMaps"*
+
+- [x] **Where:** Chunk lookup (`World.h`), BFS pathfinding (`Pathfinding.h`), world storage
+- [x] **How:** Custom `RobinHoodMap<K, V>` replacing `std::unordered_map` — flat array storage, Robin Hood linear probing, backward-shift deletion, power-of-2 bitmask indexing
+- [x] **Key advantages over `std::unordered_map`:**
+  - Flat contiguous array (no linked-list node allocation)
+  - Robin Hood eviction keeps probe lengths balanced
+  - Backward-shift deletion (no tombstones)
+  - Power-of-2 capacity with bitmask (no expensive modulo)
+- [x] **Benchmark results (100K Coord entries):**
+  - Insert: **1.62× faster**
+  - Iteration: **11.4× faster**
+  - `RobinHoodMap` used everywhere in the engine
 ---
 
 ## 🏗️ Architecture Overview

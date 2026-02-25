@@ -3,13 +3,13 @@
 #include "Chunk.h"
 #include "Coord.h"
 #include "Pixel.h"
+#include "RobinHoodMap.h"
 #include <iostream>
 #include <memory>
-#include <unordered_map>
 
 class World {
 private:
-  std::unordered_map<Coord, std::unique_ptr<Chunk>, CoordHash> chunks;
+  RobinHoodMap<Coord, std::unique_ptr<Chunk>, CoordHash> chunks;
 
 public:
   Chunk &get_chunk(Coord pos) {
@@ -18,7 +18,8 @@ public:
       chunks[pos] = std::make_unique<Chunk>(pos);
       return *chunks[pos];
     }
-    return *it->second;
+    auto [key, val] = *it;
+    return *val;
   }
 
   BlockType get_block(int wx, int wy) {

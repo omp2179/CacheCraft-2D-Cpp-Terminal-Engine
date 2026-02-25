@@ -1,9 +1,9 @@
 #pragma once
 #include "BlockType.h"
 #include "Coord.h"
+#include "RobinHoodMap.h"
 #include "World.h"
 #include <queue>
-#include <unordered_map>
 #include <vector>
 
 inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
@@ -16,7 +16,7 @@ inline std::vector<Coord> bfs_findpath(Coord s, Coord tar, World &world,
   std::queue<Coord> qq;
   qq.push(s);
 
-  std::unordered_map<Coord, Coord, CoordHash> parent;
+  RobinHoodMap<Coord, Coord, CoordHash> parent;
   parent[s] = s;
 
   int depth = 0;
