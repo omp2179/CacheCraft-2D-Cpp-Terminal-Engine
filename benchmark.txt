@@ -1,0 +1,77 @@
+
+========== BENCHMARK RESULTS ==========
+
+========================================
+   AoS vs SoA BENCHMARK
+   10000 mobs x 10000 iterations
+   AoS struct size: 80 bytes
+========================================
+
+AoS time: 1970664 us
+SoA time: 111801 us
+Speedup:  17.6265x
+
+>> TARGET MET: SoA is >= 3x faster! <<
+
+========================================
+
+
+========================================
+   HASH MAP BENCHMARK
+   std::unordered_map vs RobinHoodMap
+   100000 entries, 100000 lookups
+========================================
+
+--- Sequential Insert ---
+  unordered_map: 43382 us
+  RobinHoodMap:  23089 us
+  Speedup:       1.8789x
+
+--- Random Lookup (Hit) ---
+  unordered_map: 5647 us
+  RobinHoodMap:  9583 us
+  Speedup:       0.589273x
+
+--- Random Lookup (Miss) ---
+  unordered_map: 7231 us
+  RobinHoodMap:  8717 us
+  Speedup:       0.829529x
+
+--- Full Iteration ---
+  unordered_map: 9286 us
+  RobinHoodMap:  653 us
+  Speedup:       14.2205x
+
+========================================
+   SUMMARY
+   Insert speedup:      1.8789x
+   Lookup (hit) speedup:0.589273x
+   Lookup (miss) speedup:0.829529x
+   Iteration speedup:   14.2205x
+========================================
+
+
+========================================
+   BLOOM FILTER BENCHMARK
+   10000 spawn location checks
+   Range: 2000x2000 coords
+   Bloom: 65536 bits, 4 hashes
+========================================
+
+--- unordered_set (baseline) ---
+  Time: 1497 us
+  Unique coords: 9983/10000
+  Duplicates found: 17
+
+--- BloomFilter (65536 bits, 4 hashes) ---
+  Time: 1386 us
+  Duplicates caught: 107
+  False positives: 90 (0.901533% FPR)
+  Memory: 8192 bytes vs ~159728 bytes (set)
+
+--- RESULTS ---
+  Speedup: 1.08009x
+  Memory savings: 94.8713%
+========================================
+
+======= END BENCHMARK RESULTS =========

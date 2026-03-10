@@ -1,4 +1,5 @@
 #include "Benchmark.h"
+#include "BloomBenchmark.h"
 #include "BlockType.h"
 #include "CheatState.h"
 #include "CheatWindow.h"
@@ -12,6 +13,7 @@
 #include "PauseWindow.h"
 #include "Pixel.h"
 #include "SaveLoad.h"
+#include "TitleWindow.h"
 #include "RobinHoodMap.h"
 #include "ScreenBuffer.h"
 #include "World.h"
@@ -20,7 +22,9 @@
 #include <cstdlib>
 #include <chrono>
 #include <ctime>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -605,13 +609,40 @@ int main() {
   test_terrain();
   test_robinhood();
   // test_screenbuffer();
-  run_aos_vs_soa_benchmark();
-  run_hash_benchmark();
+
+  {
+    std::ofstream bf("benchmark.txt");
+    if (bf.is_open()) {
+      std::streambuf *orig = cout.rdbuf();
+      std::stringstream ss;
+
+      struct TeeBuf : public std::streambuf {
+        std::streambuf *a, *b;
+        TeeBuf(std::streambuf *a, std::streambuf *b) : a(a), b(b) {}
+        int overflow(int c) override {
+          if (c == EOF) return !EOF;
+          a->sputc(c);
+          b->sputc(c);
+          return c;
+        }
+      };
+
+      TeeBuf tee(orig, bf.rdbuf());
+      cout.rdbuf(&tee);
+
+      cout << "\n========== BENCHMARK RESULTS ==========\n";
+      run_aos_vs_soa_benchmark();
+      run_hash_benchmark();
+      run_bloom_benchmark();
+      cout << "\n======= END BENCHMARK RESULTS =========\n";
+
+      cout.rdbuf(orig);
+    }
+  }
 
   cout << "\n=== ALL TESTS PASSED! ===\n";
-  cout << "Starting game in 3 seconds...\n";
 #ifdef _WIN32
-  Sleep(3000);
+  Sleep(1000);
   system("cls");
 #endif
 
@@ -625,16 +656,58 @@ int main() {
   int inventory[9] = {0};
   int selected_block = 1;
 
-  while (player_y < CHUNK_SIZE - 1 &&
-         world.get_block(player_x, player_y) == BlockType::AIR) {
-    ++player_y;
-  }
-  --player_y;
-
   seed_fast_rand(static_cast<unsigned>(time(nullptr)));
+
+  TitleWindow title_window;
+
+  while (true) {
+    InputState input = get_input();
+    if (title_window.handle_input(input))
+      break;
+    title_window.render(screen);
+    screen.render();
+#ifdef _WIN32
+    Sleep(16);
+#endif
+  }
+
+  if (title_window.wants_quit) {
+#ifdef _WIN32
+    system("cls");
+#endif
+    cout << "Goodbye!\n";
+    return 0;
+  }
+
+  if (title_window.wants_load) {
+    std::ifstream check("saves/save.mc2d", std::ios::binary);
+    if (!check.good()) {
+      cout << "No save found! Starting new game...\n";
+#ifdef _WIN32
+      Sleep(1500);
+#endif
+      title_window.wants_load = false;
+    }
+  }
+
+  if (!title_window.wants_load) {
+    while (player_y < CHUNK_SIZE - 1 &&
+           world.get_block(player_x, player_y) == BlockType::AIR) {
+      ++player_y;
+    }
+    --player_y;
+  }
 
   GameWindow game_window(world, player_x, player_y, facing, inventory,
                          selected_block, cheats);
+
+  if (title_window.wants_load) {
+    int loaded_hp = 100;
+    MobStorage &m = game_window.get_mobs();
+    load_game("saves/save.mc2d", world, player_x, player_y, loaded_hp, facing,
+              selected_block, inventory, m);
+    game_window.set_hp(loaded_hp);
+  }
 
   InventoryWindow inv_window(inventory, selected_block);
 

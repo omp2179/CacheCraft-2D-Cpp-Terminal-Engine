@@ -1,5 +1,6 @@
 #pragma once
 #include "BlockType.h"
+#include "BloomFilter.h"
 #include "CheatState.h"
 #include "Coord.h"
 #include "FastRand.h"
@@ -35,6 +36,8 @@ private:
   float mob_accum = 0.0f;
   float dmg_accum = 0.0f;
   float fps = 0.0f;
+  BloomFilter spawn_bloom{16384, 3};
+  int spawn_bloom_count = 0;
 
   static constexpr float GRAVITY_MS = 250.0f;
   static constexpr float SPAWN_MS = 6000.0f;
@@ -49,7 +52,10 @@ public:
   MobStorage &get_mobs() { return mobs; }
   int get_hp() const { return hp; }
   void set_hp(int h) { hp = h; }
-  void set_dt(float d) { dt = d; fps = (d > 0.0f) ? 1000.0f / d : 0.0f; }
+  void set_dt(float d) {
+    dt = d;
+    fps = (d > 0.0f) ? 1000.0f / d : 0.0f;
+  }
 
   GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel,
              CheatState &cs)
@@ -214,7 +220,15 @@ public:
       --sy;
 
       if (sy > 0) {
-        mobs.add(sx, sy, 20, MobType::ZOMBIE, AIState::CHASING);
+        if (!spawn_bloom.maybe_contains(sx, sy)) {
+          spawn_bloom.insert(sx, sy);
+          ++spawn_bloom_count;
+          mobs.add(sx, sy, 20, MobType::ZOMBIE, AIState::CHASING);
+        }
+        if (spawn_bloom_count > 500) {
+          spawn_bloom.clear();
+          spawn_bloom_count = 0;
+        }
       }
     }
 
@@ -352,8 +366,8 @@ public:
     }
 
     std::string hud = "Pos: (" + std::to_string(player_x) + "," +
-                      std::to_string(player_y) + ")  FPS:" +
-                      std::to_string(static_cast<int>(fps)) +
+                      std::to_string(player_y) +
+                      ")  FPS:" + std::to_string(static_cast<int>(fps)) +
                       "  [WASD]Move [Arrows]Mine [1-6]Sel [E]Inv "
                       "[Space]Place [P]Pause [Q]Quit";
 

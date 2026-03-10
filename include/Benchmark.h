@@ -10,25 +10,22 @@ inline void run_aos_vs_soa_benchmark() {
   const int NUM_MOBS = 10000;
   const int NUM_ITERATIONS = 10000;
 
-  // Realistic AoS mob — a real game mob has MANY more fields.
-  // This is what a mob looks like in a production game engine.
-  // Total: ~80 bytes → only 0-1 mobs per 64-byte cache line.
   struct MobAoS {
-    int x, y;               // position (what we update)
-    int vx, vy;             // velocity
-    int hp, max_hp;         // health
-    int damage;             // attack damage
-    int ai_state;           // AI FSM state
-    int target_x, target_y; // pathfinding target
-    int anim_frame;         // animation
-    int spawn_time;         // when mob was created
-    int last_attack;        // cooldown timer
-    int path_length;        // BFS result cache
-    int flags;              // bitfield (is_hostile, is_burning, etc.)
-    int loot_table;         // drop table index
-    int armor;              // damage reduction
-    int aggro_range;        // detection distance
-    int padding[2];         // align to 80 bytes
+    int x, y;
+    int vx, vy;
+    int hp, max_hp;
+    int damage;
+    int ai_state;
+    int target_x, target_y;
+    int anim_frame;
+    int spawn_time;
+    int last_attack;
+    int path_length;
+    int flags;
+    int loot_table;
+    int armor;
+    int aggro_range;
+    int padding[2];
   };
 
   std::cout << "\n========================================\n";
@@ -38,44 +35,57 @@ inline void run_aos_vs_soa_benchmark() {
   std::cout << "   AoS struct size: " << sizeof(MobAoS) << " bytes\n";
   std::cout << "========================================\n\n";
 
-  // ---- SETUP: AoS (realistic) ----
   std::vector<MobAoS> aos_mobs(NUM_MOBS);
-  for (int i = 0; i < NUM_MOBS; i++) {
+  for (int i = 0; i < NUM_MOBS; ++i) {
     aos_mobs[i].x = static_cast<int>(fast_rand() % 1000);
     aos_mobs[i].y = static_cast<int>(fast_rand() % 1000);
+    aos_mobs[i].vx = 1;
+    aos_mobs[i].vy = 1;
     aos_mobs[i].hp = 100;
+    aos_mobs[i].max_hp = 100;
+    aos_mobs[i].damage = 10;
+    aos_mobs[i].ai_state = 1;
+    aos_mobs[i].target_x = 500;
+    aos_mobs[i].target_y = 500;
+    aos_mobs[i].armor = 5;
+    aos_mobs[i].aggro_range = 16;
   }
 
-  // ---- SETUP: SoA ----
   MobStorage soa_mobs;
-  for (int i = 0; i < NUM_MOBS; i++) {
+  for (int i = 0; i < NUM_MOBS; ++i) {
     soa_mobs.add(static_cast<int>(fast_rand() % 1000),
                  static_cast<int>(fast_rand() % 1000), 100, MobType::ZOMBIE,
                  AIState::CHASING);
   }
 
-  // Accumulators to prevent compiler from optimizing away the loops
   volatile int aos_sink = 0;
   volatile int soa_sink = 0;
 
-  // ---- BENCHMARK: AoS ----
   auto aos_start = std::chrono::high_resolution_clock::now();
-  for (int iter = 0; iter < NUM_ITERATIONS; iter++) {
-    for (int i = 0; i < NUM_MOBS; i++) {
-      aos_mobs[i].x += 1;
-      aos_mobs[i].y += 1;
+  for (int iter = 0; iter < NUM_ITERATIONS; ++iter) {
+    for (int i = 0; i < NUM_MOBS; ++i) {
+      aos_mobs[i].x += aos_mobs[i].vx;
+      aos_mobs[i].y += aos_mobs[i].vy;
+      int dx = aos_mobs[i].target_x - aos_mobs[i].x;
+      int dy = aos_mobs[i].target_y - aos_mobs[i].y;
+      if (dx > 0) aos_mobs[i].vx = 1;
+      else if (dx < 0) aos_mobs[i].vx = -1;
+      if (dy > 0) aos_mobs[i].vy = 1;
+      else if (dy < 0) aos_mobs[i].vy = -1;
+      aos_mobs[i].hp -= (aos_mobs[i].damage - aos_mobs[i].armor) > 0 ? 1 : 0;
+      if (aos_mobs[i].hp <= 0) aos_mobs[i].hp = aos_mobs[i].max_hp;
+      ++aos_mobs[i].anim_frame;
     }
   }
-  aos_sink = aos_mobs[0].x;
+  aos_sink = aos_mobs[0].x + aos_mobs[0].hp;
   auto aos_end = std::chrono::high_resolution_clock::now();
   auto aos_time =
       std::chrono::duration_cast<std::chrono::microseconds>(aos_end - aos_start)
           .count();
 
-  // ---- BENCHMARK: SoA ----
   auto soa_start = std::chrono::high_resolution_clock::now();
-  for (int iter = 0; iter < NUM_ITERATIONS; iter++) {
-    for (int i = 0; i < NUM_MOBS; i++) {
+  for (int iter = 0; iter < NUM_ITERATIONS; ++iter) {
+    for (int i = 0; i < NUM_MOBS; ++i) {
       soa_mobs.x[i] += 1;
       soa_mobs.y[i] += 1;
     }
@@ -86,11 +96,9 @@ inline void run_aos_vs_soa_benchmark() {
       std::chrono::duration_cast<std::chrono::microseconds>(soa_end - soa_start)
           .count();
 
-  // Suppress unused warnings
   (void)aos_sink;
   (void)soa_sink;
 
-  // ---- RESULTS ----
   double speedup = static_cast<double>(aos_time) / soa_time;
 
   std::cout << "AoS time: " << aos_time << " us\n";

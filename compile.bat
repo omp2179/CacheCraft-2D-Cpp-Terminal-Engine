@@ -1,4 +1,5 @@
 @echo off
+taskkill /F /IM game.exe >nul 2>&1
 echo Compiling...
 g++ -std=c++23 -O2 -Wall -Wextra -I include src/*.cpp -o build/game.exe
 if %errorlevel% == 0 (
