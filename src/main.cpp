@@ -18,6 +18,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
+#include <chrono>
 #include <ctime>
 #include <iostream>
 #include <stack>
@@ -644,8 +645,18 @@ int main() {
   std::stack<Window *> windows;
   windows.push(&game_window);
 
+  auto prev_time = std::chrono::high_resolution_clock::now();
+
   while (!windows.empty()) {
+    auto now = std::chrono::high_resolution_clock::now();
+    float dt = std::chrono::duration<float, std::milli>(now - prev_time).count();
+    prev_time = now;
+
     InputState input = get_input();
+
+    if (windows.top() == &game_window) {
+      game_window.set_dt(dt);
+    }
 
     bool should_close = windows.top()->handle_input(input);
     if (should_close) {
@@ -696,7 +707,7 @@ int main() {
     screen.render();
 
 #ifdef _WIN32
-    Sleep(50);
+    Sleep(16);
 #endif
   }
 

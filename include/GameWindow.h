@@ -21,21 +21,25 @@ private:
   int &facing;
   int *inventory;
   int &selected_block;
-  int fall_timer = 0;
-  const int GRAVITY_INTERVAL = 5;
   CheatState &cheats;
   int hp = 100;
   int max_hp = 100;
   int fall_distance = 0;
   int spawn_x = 0;
   int spawn_y = 0;
-  int damage_cooldown = 0;
   bool is_dead = false;
 
-  int spawn_timer = 0;
-  const int SPAWN_INTERVAL = 120;
-  const int MOB_MOVE_INTERVAL = 10;
-  int mob_move_timer = 0;
+  float dt = 0.0f;
+  float fall_accum = 0.0f;
+  float spawn_accum = 0.0f;
+  float mob_accum = 0.0f;
+  float dmg_accum = 0.0f;
+  float fps = 0.0f;
+
+  static constexpr float GRAVITY_MS = 250.0f;
+  static constexpr float SPAWN_MS = 6000.0f;
+  static constexpr float MOB_MOVE_MS = 500.0f;
+  static constexpr float DMG_COOLDOWN_MS = 2000.0f;
 
 public:
   bool wants_inventory = false;
@@ -45,6 +49,7 @@ public:
   MobStorage &get_mobs() { return mobs; }
   int get_hp() const { return hp; }
   void set_hp(int h) { hp = h; }
+  void set_dt(float d) { dt = d; fps = (d > 0.0f) ? 1000.0f / d : 0.0f; }
 
   GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel,
              CheatState &cs)
@@ -87,7 +92,7 @@ public:
             world.get_block(player_x, player_y - 1) == BlockType::AIR;
         if (on_ground && above_clear) {
           player_y--;
-          fall_timer = 0;
+          fall_accum = 0.0f;
           fall_distance = 0;
         }
       }
@@ -113,7 +118,6 @@ public:
         world.set_block(player_x, player_y - 1, BlockType::AIR);
         inventory[static_cast<int>(target)]++;
         player_y--;
-        // fall_timer = 0;
       }
     }
     if (input.mine_down) {
@@ -166,9 +170,9 @@ public:
     }
 
     if (!cheats.spectator_mode) {
-      fall_timer++;
-      if (fall_timer >= GRAVITY_INTERVAL) {
-        fall_timer = 0;
+      fall_accum += dt;
+      while (fall_accum >= GRAVITY_MS) {
+        fall_accum -= GRAVITY_MS;
         if (world.get_block(player_x, player_y + 1) == BlockType::AIR) {
           player_y++;
           fall_distance++;
@@ -190,9 +194,9 @@ public:
       }
     }
 
-    ++spawn_timer;
-    if (spawn_timer >= SPAWN_INTERVAL) {
-      spawn_timer = 0;
+    spawn_accum += dt;
+    if (spawn_accum >= SPAWN_MS) {
+      spawn_accum -= SPAWN_MS;
 
       uint32_t r = fast_rand();
       int offset = (r & 31) + 15;
@@ -200,23 +204,23 @@ public:
         offset = -offset;
       }
 
-      int spawn_x = player_x + offset;
-      int spawn_y = player_y;
+      int sx = player_x + offset;
+      int sy = player_y;
 
-      while (spawn_y < CHUNK_SIZE - 1 and
-             world.get_block(spawn_x, spawn_y) == BlockType::AIR) {
-        ++spawn_y;
+      while (sy < CHUNK_SIZE - 1 and
+             world.get_block(sx, sy) == BlockType::AIR) {
+        ++sy;
       }
-      --spawn_y;
+      --sy;
 
-      if (spawn_y > 0) {
-        mobs.add(spawn_x, spawn_y, 20, MobType::ZOMBIE, AIState::CHASING);
+      if (sy > 0) {
+        mobs.add(sx, sy, 20, MobType::ZOMBIE, AIState::CHASING);
       }
     }
 
-    ++mob_move_timer;
-    if (mob_move_timer >= MOB_MOVE_INTERVAL) {
-      mob_move_timer = 0;
+    mob_accum += dt;
+    if (mob_accum >= MOB_MOVE_MS) {
+      mob_accum -= MOB_MOVE_MS;
 
       Coord player_pos = {player_x, player_y};
 
@@ -230,13 +234,11 @@ public:
           continue;
         }
 
-        // 1. STRICT GRAVITY: If in mid-air, you MUST fall down. No AI allowed.
         if (world.get_block(mob_pos.x, mob_pos.y + 1) == BlockType::AIR) {
           mobs.set_pos(i, {mob_pos.x, mob_pos.y + 1});
-        } 
-        // 2. ON GROUND: Use AI to pathfind to player
-        else {
-          std::vector<Coord> path = bfs_findpath(mob_pos, player_pos, world, 150);
+        } else {
+          std::vector<Coord> path =
+              bfs_findpath(mob_pos, player_pos, world, 150);
           if (path.size() >= 2) {
             mobs.set_pos(i, path[1]);
           }
@@ -244,11 +246,13 @@ public:
       }
     }
 
-    if (damage_cooldown > 0) {
-      damage_cooldown--;
+    if (dmg_accum > 0.0f) {
+      dmg_accum -= dt;
+      if (dmg_accum < 0.0f)
+        dmg_accum = 0.0f;
     }
 
-    if (!cheats.god_mode && damage_cooldown == 0) {
+    if (!cheats.god_mode && dmg_accum <= 0.0f) {
       for (size_t i = 0; i < mobs.count(); ++i) {
         int dx = mobs.x[i] - player_x;
         int dy = mobs.y[i] - player_y;
@@ -256,7 +260,7 @@ public:
           hp -= 10;
           if (hp < 0)
             hp = 0;
-          damage_cooldown = 40;
+          dmg_accum = DMG_COOLDOWN_MS;
 
           int knockback_x = (dx <= 0) ? 1 : -1;
           for (int k = 0; k < 2; k++) {
@@ -282,7 +286,7 @@ public:
         player_x = spawn_x;
         player_y = spawn_y;
         fall_distance = 0;
-        damage_cooldown = 60;
+        dmg_accum = 3000.0f;
         is_dead = false;
       }
       return false;
@@ -348,9 +352,10 @@ public:
     }
 
     std::string hud = "Pos: (" + std::to_string(player_x) + "," +
-                      std::to_string(player_y) +
-                      ")  [WASD+W]Move  [Arrows]Mine [1-6]Select [E]Inventory "
-                      "[Space]Place  [Q]Quit";
+                      std::to_string(player_y) + ")  FPS:" +
+                      std::to_string(static_cast<int>(fps)) +
+                      "  [WASD]Move [Arrows]Mine [1-6]Sel [E]Inv "
+                      "[Space]Place [P]Pause [Q]Quit";
 
     std::string inv_hud = "Inv:";
     inv_hud += (selected_block == 1 ? " >" : "  ");

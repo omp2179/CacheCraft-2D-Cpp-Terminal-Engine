@@ -4,8 +4,8 @@
 #include <iostream>
 #include <string>
 
-constexpr int SCREEN_WIDTH = 80;
-constexpr int SCREEN_HEIGHT = 24;
+constexpr int SCREEN_WIDTH = 100;
+constexpr int SCREEN_HEIGHT = 28;
 
 class ScreenBuffer {
 private:
