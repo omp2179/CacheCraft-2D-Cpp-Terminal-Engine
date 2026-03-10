@@ -46,6 +46,15 @@ public:
 
   size_t chunk_count() const { return chunks.size(); }
 
+  auto begin() { return chunks.begin(); }
+  auto end() { return chunks.end(); }
+
+  void load_chunk(Coord pos, std::unique_ptr<Chunk> c) {
+    chunks[pos] = std::move(c);
+  }
+
+  void clear() { chunks.clear(); }
+
 private:
   static Coord world_to_chunk(int wx, int wy) {
     int cx, cy;

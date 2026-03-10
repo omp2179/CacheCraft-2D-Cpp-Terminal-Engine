@@ -16,3 +16,6 @@ compile_commands.json
 # VS Code settings
 .vscode/
 .cache/clangd/index/main.cpp.57DA9117BDA69699.idx
+
+# Save files
+saves/

@@ -11,6 +11,7 @@
 #include "InventoryWindow.h"
 #include "PauseWindow.h"
 #include "Pixel.h"
+#include "SaveLoad.h"
 #include "RobinHoodMap.h"
 #include "ScreenBuffer.h"
 #include "World.h"
@@ -667,6 +668,24 @@ int main() {
       pause_window.wants_cheat = false;
       windows.pop();
       windows.push(&cheat_window);
+    }
+
+    if (windows.top() == &game_window && pause_window.wants_save) {
+      pause_window.wants_save = false;
+      system("mkdir saves 2>nul");
+      save_game("saves/save.mc2d", world, player_x, player_y,
+               game_window.get_hp(), facing, selected_block, inventory,
+               game_window.get_mobs());
+    }
+
+    if (windows.top() == &game_window && pause_window.wants_load) {
+      pause_window.wants_load = false;
+      int loaded_hp = 100;
+      if (load_game("saves/save.mc2d", world, player_x, player_y, loaded_hp,
+                    facing, selected_block, inventory,
+                    game_window.get_mobs())) {
+        game_window.set_hp(loaded_hp);
+      }
     }
 
     if (windows.top() == &pause_window && pause_window.wants_quit) {

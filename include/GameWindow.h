@@ -42,6 +42,10 @@ public:
   bool wants_quit = false;
   bool wants_pause = false;
 
+  MobStorage &get_mobs() { return mobs; }
+  int get_hp() const { return hp; }
+  void set_hp(int h) { hp = h; }
+
   GameWindow(World &w, int &px, int &py, int &f, int *inv, int &sel,
              CheatState &cs)
       : world(w), player_x(px), player_y(py), facing(f), inventory(inv),

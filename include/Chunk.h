@@ -13,6 +13,14 @@ class Chunk {
 public:
   Chunk(Coord pos) : position(pos) { generate_terrain(); }
 
+  Chunk(Coord pos, std::array<std::array<BlockType, CHUNK_SIZE>, CHUNK_SIZE> d)
+      : blocks(std::move(d)), position(pos) {}
+
+  const std::array<std::array<BlockType, CHUNK_SIZE>, CHUNK_SIZE> &
+  get_blocks() const {
+    return blocks;
+  }
+
   BlockType get_block(int xx, int yy) const {
     if (xx < 0 or xx >= CHUNK_SIZE or yy < 0 or yy >= CHUNK_SIZE) {
       return BlockType::AIR;
